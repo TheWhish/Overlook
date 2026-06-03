@@ -1,10 +1,9 @@
 using UnityEngine;
-using UnityEngine.UI;
 
-public class StaminaBarView : MonoBehaviour
+[DisallowMultipleComponent]
+public class StaminaBarView : DelayedResourceBarView
 {
     [SerializeField] private PlayerStamina playerStamina;
-    [SerializeField] private Image fillImage;
 
     private void OnEnable()
     {
@@ -13,8 +12,13 @@ public class StaminaBarView : MonoBehaviour
             return;
         }
 
-        playerStamina.StaminaChanged += UpdateView;
-        UpdateView(playerStamina.NormalizedStamina);
+        playerStamina.StaminaChanged += HandleStaminaChanged;
+        RefreshImmediate();
+    }
+
+    private void Start()
+    {
+        RefreshImmediate();
     }
 
     private void OnDisable()
@@ -24,16 +28,21 @@ public class StaminaBarView : MonoBehaviour
             return;
         }
 
-        playerStamina.StaminaChanged -= UpdateView;
+        playerStamina.StaminaChanged -= HandleStaminaChanged;
     }
 
-    private void UpdateView(float normalizedValue)
+    private void HandleStaminaChanged(float normalizedValue)
     {
-        if (fillImage == null)
+        SetNormalizedTarget(normalizedValue);
+    }
+
+    private void RefreshImmediate()
+    {
+        if (playerStamina == null)
         {
             return;
         }
 
-        fillImage.fillAmount = normalizedValue;
+        SetNormalizedValueImmediate(playerStamina.NormalizedStamina);
     }
 }

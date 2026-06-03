@@ -1,28 +1,57 @@
 using System;
 using UnityEngine;
 
+[DisallowMultipleComponent]
 public class PlayerStamina : MonoBehaviour
 {
     [Header("Stamina")]
     [SerializeField, Min(1f)] private float maxStamina = 100f;
-    [SerializeField, Min(0f)] private float drainPerSecond = 25f;
     [SerializeField, Min(0f)] private float recoveryPerSecond = 18f;
-    [SerializeField, Min(0f)] private float recoveryDelay = 0.5f;
+    [SerializeField, Min(0f)] private float recoveryDelay = 1.1f;
 
     private float currentStamina;
     private float lastDrainTime;
+    private bool isInitialized;
 
-    public float CurrentStamina => currentStamina;
+    public float CurrentStamina
+    {
+        get
+        {
+            EnsureInitialized();
+            return currentStamina;
+        }
+    }
+
     public float MaxStamina => maxStamina;
-    public float NormalizedStamina => currentStamina / maxStamina;
-    public bool HasStamina => currentStamina > 0f;
+    public float NormalizedStamina
+    {
+        get
+        {
+            EnsureInitialized();
+            return maxStamina > 0f ? currentStamina / maxStamina : 0f;
+        }
+    }
+
+    public bool HasStamina
+    {
+        get
+        {
+            EnsureInitialized();
+            return currentStamina > 0f;
+        }
+    }
 
     public event Action<float> StaminaChanged;
 
     private void Awake()
     {
-        currentStamina = maxStamina;
-        StaminaChanged?.Invoke(NormalizedStamina);
+        EnsureInitialized();
+    }
+
+    private void OnEnable()
+    {
+        EnsureInitialized();
+        NotifyStaminaChanged();
     }
 
     private void Update()
@@ -32,17 +61,24 @@ public class PlayerStamina : MonoBehaviour
 
     public bool TrySpend(float amount)
     {
-        if (currentStamina <= 0f)
+        EnsureInitialized();
+
+        if (amount <= 0f)
+        {
+            return true;
+        }
+
+        if (currentStamina < amount)
         {
             return false;
         }
 
-        currentStamina = Mathf.Max(currentStamina - amount, 0f);
+        currentStamina -= amount;
         lastDrainTime = Time.time;
 
-        StaminaChanged?.Invoke(NormalizedStamina);
+        NotifyStaminaChanged();
 
-        return currentStamina > 0f;
+        return true;
     }
 
     private void RecoverStamina()
@@ -62,6 +98,35 @@ public class PlayerStamina : MonoBehaviour
             maxStamina
         );
 
+        NotifyStaminaChanged();
+    }
+
+    private void OnValidate()
+    {
+        maxStamina = Mathf.Max(1f, maxStamina);
+        recoveryPerSecond = Mathf.Max(0f, recoveryPerSecond);
+        recoveryDelay = Mathf.Max(0f, recoveryDelay);
+
+        if (!Application.isPlaying)
+        {
+            currentStamina = maxStamina;
+            isInitialized = true;
+        }
+    }
+
+    private void EnsureInitialized()
+    {
+        if (isInitialized)
+        {
+            return;
+        }
+
+        currentStamina = maxStamina;
+        isInitialized = true;
+    }
+
+    private void NotifyStaminaChanged()
+    {
         StaminaChanged?.Invoke(NormalizedStamina);
     }
 }

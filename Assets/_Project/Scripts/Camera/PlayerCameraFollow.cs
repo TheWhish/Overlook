@@ -1,17 +1,18 @@
 using UnityEngine;
 
+[DisallowMultipleComponent]
 public class PlayerCameraFollow : MonoBehaviour
 {
     [Header("Target")]
     [SerializeField] private Transform target;
 
     [Header("Follow")]
-    [SerializeField] private Vector2 targetOffset = new Vector2(0f, 0.22f);
-    [SerializeField, Min(0f)] private float smoothTime = 0.12f;
+    [SerializeField] private Vector2 targetOffset = new Vector2(0f, 0.14f);
+    [SerializeField, Min(0f)] private float smoothTime = 0.2f;
     [SerializeField, Min(0f)] private float maxSpeed = 10f;
 
     [Header("Dead Zone")]
-    [SerializeField] private Vector2 deadZoneSize = new Vector2(0.20f, 0.14f);
+    [SerializeField] private Vector2 deadZoneSize = new Vector2(0.25f, 0.2f);
 
     [Header("Pixel Art")]
     [SerializeField] private bool pixelSnap = false;
