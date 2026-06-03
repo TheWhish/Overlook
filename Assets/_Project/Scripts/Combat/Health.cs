@@ -15,6 +15,8 @@ public class Health : MonoBehaviour, IDamageable
     public event Action<DamageInfo> Damaged;
     public event Action<DamageInfo> Died;
 
+    public static event Action<Health, DamageInfo> AnyDamaged;
+
     public float MaxHealth => maxHealth;
     public float CurrentHealth
     {
@@ -67,6 +69,7 @@ public class Health : MonoBehaviour, IDamageable
         currentHealth = Mathf.Max(0f, currentHealth - damageAmount);
 
         Damaged?.Invoke(damageInfo);
+        AnyDamaged?.Invoke(this, damageInfo);
         NotifyHealthChanged();
 
         if (logDamage)

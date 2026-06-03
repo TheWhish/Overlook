@@ -110,13 +110,6 @@ public class PrototypeWaveSpawner : MonoBehaviour
 
         while (!isGameOver)
         {
-            yield return new WaitUntil(() => isGameOver || !HasAnyActiveEnemyInScene());
-
-            if (isGameOver)
-            {
-                yield break;
-            }
-
             currentWaveNumber++;
             SpawnWave(enemyCount);
 
@@ -125,7 +118,7 @@ public class PrototypeWaveSpawner : MonoBehaviour
                 Debug.Log($"Wave {currentWaveNumber} started. Enemies: {enemyCount}", this);
             }
 
-            yield return new WaitUntil(() => isGameOver || !HasAnyActiveEnemyInScene());
+            yield return new WaitUntil(() => isGameOver || !HasTrackedAliveEnemies());
 
             if (isGameOver)
             {
@@ -278,23 +271,14 @@ public class PrototypeWaveSpawner : MonoBehaviour
         aliveEnemies.Remove(deadEnemy);
     }
 
-    private bool HasAnyActiveEnemyInScene()
+    private bool HasTrackedAliveEnemies()
     {
-        EnemyDamageReaction[] enemies = FindObjectsByType<EnemyDamageReaction>();
+        aliveEnemies.RemoveWhere(enemyHealth =>
+            enemyHealth == null
+            || enemyHealth.IsDead
+            || !enemyHealth.gameObject.activeInHierarchy);
 
-        for (int i = 0; i < enemies.Length; i++)
-        {
-            EnemyDamageReaction enemy = enemies[i];
-
-            if (enemy == null || !enemy.gameObject.activeInHierarchy)
-            {
-                continue;
-            }
-
-            return true;
-        }
-
-        return false;
+        return aliveEnemies.Count > 0;
     }
 
     private void HandlePlayerDied(DamageInfo damageInfo)
