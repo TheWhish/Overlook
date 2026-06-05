@@ -47,12 +47,9 @@ public class PlayerController : MonoBehaviour
 
     private void Update()
     {
-        if (IsMovementBlocked())
+        if (GameplayInputGate.IsGameplayInputBlocked || IsMovementBlocked())
         {
-            moveInput = Vector2.zero;
-            isRunning = false;
-            currentSpeed = 0f;
-            SetMovementAnimationStopped();
+            StopMovement();
             return;
         }
 
@@ -63,8 +60,13 @@ public class PlayerController : MonoBehaviour
 
     private void FixedUpdate()
     {
-        if (IsMovementBlocked())
+        if (GameplayInputGate.IsGameplayInputBlocked || IsMovementBlocked())
         {
+            if (rb != null)
+            {
+                rb.linearVelocity = Vector2.zero;
+            }
+
             return;
         }
 
@@ -150,6 +152,20 @@ public class PlayerController : MonoBehaviour
     {
         animator.SetFloat(SpeedHash, 0f);
         animator.SetBool(IsRunningHash, false);
+    }
+
+    private void StopMovement()
+    {
+        moveInput = Vector2.zero;
+        isRunning = false;
+        currentSpeed = 0f;
+
+        if (rb != null)
+        {
+            rb.linearVelocity = Vector2.zero;
+        }
+
+        SetMovementAnimationStopped();
     }
 
     private void OnValidate()

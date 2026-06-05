@@ -7,7 +7,7 @@ public sealed class MainMenuController : MonoBehaviour
 {
     [SerializeField] private Button playButton;
     [SerializeField] private Button quitButton;
-    [SerializeField] private string fallbackSceneName = "SampleScene";
+    [SerializeField] private string fallbackSceneName = "Game";
 
     private void Awake()
     {
@@ -32,13 +32,13 @@ public sealed class MainMenuController : MonoBehaviour
 
         if (currentBuildIndex >= 0 && nextBuildIndex < SceneManager.sceneCountInBuildSettings)
         {
-            SceneManager.LoadScene(nextBuildIndex);
+            SceneTransition.LoadScene(nextBuildIndex);
             return;
         }
 
         if (!string.IsNullOrEmpty(fallbackSceneName))
         {
-            SceneManager.LoadScene(fallbackSceneName);
+            SceneTransition.LoadScene(fallbackSceneName);
             return;
         }
 

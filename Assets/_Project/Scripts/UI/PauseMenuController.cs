@@ -1,5 +1,5 @@
 using UnityEngine;
-using UnityEngine.SceneManagement;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 [DisallowMultipleComponent]
@@ -10,13 +10,14 @@ public sealed class PauseMenuController : MonoBehaviour
     [SerializeField] private Button mainMenuButton;
     [SerializeField] private string mainMenuSceneName = "MainMenu";
     [SerializeField] private KeyCode pauseKey = KeyCode.Escape;
+    [SerializeField, Min(0f)] private float resumeInputLockDuration = 0.12f;
 
     private bool isPaused;
 
     private void Awake()
     {
         ResolveReferences();
-        SetPaused(false);
+        SetPaused(false, force: true);
     }
 
     private void OnEnable()
@@ -28,16 +29,21 @@ public sealed class PauseMenuController : MonoBehaviour
     private void OnDisable()
     {
         RemoveButtonListeners();
-        Time.timeScale = 1f;
+        ClearPauseState();
     }
 
     private void OnDestroy()
     {
-        Time.timeScale = 1f;
+        ClearPauseState();
     }
 
     private void Update()
     {
+        if (SceneTransition.IsTransitioning)
+        {
+            return;
+        }
+
         if (Input.GetKeyDown(pauseKey))
         {
             SetPaused(!isPaused);
@@ -51,13 +57,19 @@ public sealed class PauseMenuController : MonoBehaviour
 
     public void ReturnToMainMenu()
     {
-        Time.timeScale = 1f;
-        SceneManager.LoadScene(mainMenuSceneName);
+        PrepareForSceneLoad();
+        SceneTransition.LoadScene(mainMenuSceneName);
     }
 
-    private void SetPaused(bool paused)
+    private void SetPaused(bool paused, bool force = false)
     {
+        if (!force && isPaused == paused)
+        {
+            return;
+        }
+
         isPaused = paused;
+        GameplayInputGate.SetPauseBlocked(paused);
 
         if (pauseMenu != null)
         {
@@ -65,6 +77,12 @@ public sealed class PauseMenuController : MonoBehaviour
         }
 
         Time.timeScale = paused ? 0f : 1f;
+
+        if (!paused && !force)
+        {
+            GameplayInputGate.BlockFor(resumeInputLockDuration, waitUntilPrimaryPointerReleased: true);
+            ClearSelectedUiObject();
+        }
     }
 
     private void AddButtonListeners()
@@ -123,5 +141,40 @@ public sealed class PauseMenuController : MonoBehaviour
         }
 
         return null;
+    }
+
+    private void ClearPauseState()
+    {
+        isPaused = false;
+        GameplayInputGate.ClearPauseAndPointerBlocks();
+
+        if (pauseMenu != null)
+        {
+            pauseMenu.SetActive(false);
+        }
+
+        Time.timeScale = 1f;
+        ClearSelectedUiObject();
+    }
+
+    private void PrepareForSceneLoad()
+    {
+        isPaused = false;
+        GameplayInputGate.ClearPauseAndPointerBlocks();
+        Time.timeScale = 1f;
+        ClearSelectedUiObject();
+    }
+
+    private static void ClearSelectedUiObject()
+    {
+        if (EventSystem.current != null)
+        {
+            EventSystem.current.SetSelectedGameObject(null);
+        }
+    }
+
+    private void OnValidate()
+    {
+        resumeInputLockDuration = Mathf.Max(0f, resumeInputLockDuration);
     }
 }

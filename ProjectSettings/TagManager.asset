@@ -47,6 +47,9 @@ TagManager:
   - name: WallsBack
     uniqueID: 127394022
     locked: 0
+  - name: Decoration
+    uniqueID: 3619669201
+    locked: 0
   - name: Characters
     uniqueID: 127394023
     locked: 0

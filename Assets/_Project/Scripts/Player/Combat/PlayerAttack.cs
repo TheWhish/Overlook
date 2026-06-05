@@ -84,6 +84,11 @@ public class PlayerAttack : MonoBehaviour
 
     private void Update()
     {
+        if (ShouldIgnoreAttackInput())
+        {
+            return;
+        }
+
         if (Input.GetKeyDown(attackKey))
         {
             TryAttack();
@@ -92,6 +97,11 @@ public class PlayerAttack : MonoBehaviour
 
     private void TryAttack()
     {
+        if (ShouldIgnoreAttackInput())
+        {
+            return;
+        }
+
         if (attackRoutine != null)
         {
             return;
@@ -208,6 +218,12 @@ public class PlayerAttack : MonoBehaviour
             : leftHitboxOffset;
 
         attackHitbox.transform.localPosition = offset;
+    }
+
+    private bool ShouldIgnoreAttackInput()
+    {
+        return GameplayInputGate.IsGameplayInputBlocked
+            || GameplayInputGate.IsPointerOverUi();
     }
 
     public void CancelAttack()
