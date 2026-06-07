@@ -11,23 +11,41 @@ public class EnemyTargetSensor : MonoBehaviour
     [SerializeField, Min(0.02f)] private float scanInterval = 0.15f;
     [SerializeField, Min(0f)] private float targetMemoryTime = 0.6f;
 
+    [Header("Visibility")]
+    [SerializeField] private bool requireLineOfSight = true;
+    [SerializeField] private LayerMask lineOfSightObstacleLayers = 1 << 9;
+    [SerializeField, Min(0f)] private float lineOfSightPadding = 0.02f;
+    [SerializeField] private bool useAwarenessZones = true;
+
     private readonly Collider2D[] targetBuffer = new Collider2D[MaxTargets];
     private ContactFilter2D targetFilter;
     private Transform currentTarget;
     private Collider2D currentTargetCollider;
+    private Collider2D ownCollider;
+    private RoomAwarenessMember awarenessMember;
     private Vector2 lastKnownTargetPosition;
     private float lastTargetSeenTime = -999f;
     private float nextScanTime;
+    private bool hasEngagedTarget;
 
     public Transform CurrentTarget => currentTarget;
     public Collider2D CurrentTargetCollider => currentTargetCollider;
     public bool HasTarget => currentTarget != null;
     public bool HasKnownTarget => HasTarget || Time.time - lastTargetSeenTime <= targetMemoryTime;
+    public bool HasEngagedTarget => hasEngagedTarget;
     public Vector2 LastKnownTargetPosition => lastKnownTargetPosition;
     public float DetectionRange => detectionRange;
 
     private void Awake()
     {
+        ownCollider = GetComponent<Collider2D>();
+        awarenessMember = GetComponent<RoomAwarenessMember>();
+
+        if (awarenessMember == null)
+        {
+            awarenessMember = gameObject.AddComponent<RoomAwarenessMember>();
+        }
+
         ConfigureFilter();
     }
 
@@ -86,6 +104,11 @@ public class EnemyTargetSensor : MonoBehaviour
 
     private void ScanForTarget()
     {
+        if (awarenessMember != null)
+        {
+            awarenessMember.RefreshCurrentZone();
+        }
+
         Vector2 origin = transform.position;
         int hitCount = Physics2D.OverlapCircle(origin, detectionRange, targetFilter, targetBuffer);
 
@@ -110,6 +133,11 @@ public class EnemyTargetSensor : MonoBehaviour
                 continue;
             }
 
+            if (!CanPerceiveTarget(hit))
+            {
+                continue;
+            }
+
             Vector2 closestPoint = hit.ClosestPoint(origin);
             float sqrDistance = (closestPoint - origin).sqrMagnitude;
 
@@ -127,6 +155,7 @@ public class EnemyTargetSensor : MonoBehaviour
             currentTargetCollider = bestTargetCollider;
             lastKnownTargetPosition = GetTargetPoint(bestTargetCollider, bestTarget);
             lastTargetSeenTime = Time.time;
+            hasEngagedTarget = true;
             return;
         }
 
@@ -151,6 +180,72 @@ public class EnemyTargetSensor : MonoBehaviour
             : Vector2.zero;
     }
 
+    private bool CanPerceiveTarget(Collider2D targetCollider)
+    {
+        if (targetCollider == null)
+        {
+            return false;
+        }
+
+        if (useAwarenessZones && !SharesAwarenessZone(targetCollider))
+        {
+            return false;
+        }
+
+        return !requireLineOfSight || !IsLineOfSightBlocked(targetCollider);
+    }
+
+    private bool SharesAwarenessZone(Collider2D targetCollider)
+    {
+        if (awarenessMember == null || awarenessMember.CurrentZone == null)
+        {
+            return true;
+        }
+
+        if (hasEngagedTarget)
+        {
+            return true;
+        }
+
+        RoomAwarenessMember targetMember = targetCollider.GetComponentInParent<RoomAwarenessMember>();
+
+        if (targetMember != null)
+        {
+            targetMember.RefreshCurrentZone();
+        }
+
+        return targetMember != null && awarenessMember.SharesZoneWith(targetMember);
+    }
+
+    private bool IsLineOfSightBlocked(Collider2D targetCollider)
+    {
+        if (lineOfSightObstacleLayers.value == 0)
+        {
+            return false;
+        }
+
+        Vector2 origin = GetSensorPoint();
+        Vector2 targetPoint = GetTargetPoint(targetCollider, targetCollider.transform);
+        Vector2 toTarget = targetPoint - origin;
+        float distance = toTarget.magnitude;
+
+        if (distance <= 0.0001f)
+        {
+            return false;
+        }
+
+        float castDistance = Mathf.Max(0f, distance - lineOfSightPadding);
+        RaycastHit2D hit = Physics2D.Linecast(origin, origin + toTarget.normalized * castDistance, lineOfSightObstacleLayers);
+        return hit.collider != null;
+    }
+
+    private Vector2 GetSensorPoint()
+    {
+        return ownCollider != null
+            ? ownCollider.bounds.center
+            : transform.position;
+    }
+
     private void ConfigureFilter()
     {
         targetFilter = new ContactFilter2D
@@ -167,6 +262,7 @@ public class EnemyTargetSensor : MonoBehaviour
         detectionRange = Mathf.Max(0f, detectionRange);
         scanInterval = Mathf.Max(0.02f, scanInterval);
         targetMemoryTime = Mathf.Max(0f, targetMemoryTime);
+        lineOfSightPadding = Mathf.Max(0f, lineOfSightPadding);
         ConfigureFilter();
     }
 

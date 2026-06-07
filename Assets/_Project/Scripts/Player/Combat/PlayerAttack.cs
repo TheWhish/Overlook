@@ -21,6 +21,12 @@ public class PlayerAttack : MonoBehaviour
 
     [Header("Attack")]
     [SerializeField, Min(0f)] private float staminaCost = 18f;
+    [SerializeField, Min(0f)] private float attackCooldown = 0.12f;
+
+    [Header("Animation State Names")]
+    [SerializeField] private string attackIdleStateName = "Attack_Idle";
+    [SerializeField] private string attackWalkStateName = "Attack_Walk";
+    [SerializeField] private string attackRunStateName = "Attack_Run";
 
     [Header("Hitbox Timing")]
     [SerializeField, Min(0f)] private float hitboxDelay = 0.08f;
@@ -40,6 +46,7 @@ public class PlayerAttack : MonoBehaviour
     private Coroutine attackRoutine;
     private float lockedHorizontalDirection = 1f;
     private float facingLockUntil;
+    private float nextAttackAllowedTime;
 
     public bool IsAttacking => attackRoutine != null;
     public bool IsFacingLocked => Time.time < facingLockUntil;
@@ -107,6 +114,11 @@ public class PlayerAttack : MonoBehaviour
             return;
         }
 
+        if (Time.time < nextAttackAllowedTime)
+        {
+            return;
+        }
+
         if (hurtReaction != null && hurtReaction.IsHurting)
         {
             return;
@@ -131,6 +143,7 @@ public class PlayerAttack : MonoBehaviour
     private IEnumerator AttackRoutine(float attackHorizontalDirection)
     {
         float currentAttackDuration = GetAttackDuration();
+        int attackStateHash = Animator.StringToHash(GetAttackStateName());
 
         facingLockUntil = Time.time + currentAttackDuration + PostAttackFacingLockTime;
 
@@ -142,6 +155,7 @@ public class PlayerAttack : MonoBehaviour
 
         animator.SetFloat(HorizontalHash, attackHorizontalDirection);
         animator.SetBool(IsAttackingHash, true);
+        animator.Play(attackStateHash, 0, 0f);
 
         UpdateHitboxPosition(attackHorizontalDirection);
 
@@ -169,6 +183,7 @@ public class PlayerAttack : MonoBehaviour
         animator.SetBool(IsAttackingHash, false);
 
         attackRoutine = null;
+        nextAttackAllowedTime = Time.time + attackCooldown;
     }
 
     private float GetAttackDuration()
@@ -184,6 +199,18 @@ public class PlayerAttack : MonoBehaviour
         }
 
         return AttackWalkDuration;
+    }
+
+    private string GetAttackStateName()
+    {
+        if (playerController == null || !playerController.HasMovementInput)
+        {
+            return attackIdleStateName;
+        }
+
+        return playerController.IsRunning
+            ? attackRunStateName
+            : attackWalkStateName;
     }
 
     private float GetAttackHorizontalDirection()
@@ -246,7 +273,23 @@ public class PlayerAttack : MonoBehaviour
     private void OnValidate()
     {
         staminaCost = Mathf.Max(0f, staminaCost);
+        attackCooldown = Mathf.Max(0f, attackCooldown);
         hitboxDelay = Mathf.Max(0f, hitboxDelay);
         hitboxActiveTime = Mathf.Max(0f, hitboxActiveTime);
+
+        if (string.IsNullOrWhiteSpace(attackIdleStateName))
+        {
+            attackIdleStateName = "Attack_Idle";
+        }
+
+        if (string.IsNullOrWhiteSpace(attackWalkStateName))
+        {
+            attackWalkStateName = "Attack_Walk";
+        }
+
+        if (string.IsNullOrWhiteSpace(attackRunStateName))
+        {
+            attackRunStateName = "Attack_Run";
+        }
     }
 }

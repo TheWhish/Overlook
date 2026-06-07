@@ -20,6 +20,7 @@ GameObject:
   - component: {fileID: 7355530258458391649}
   - component: {fileID: 5943821682197891390}
   - component: {fileID: 4703821177350737797}
+  - component: {fileID: 1628325410478862142}
   m_Layer: 6
   m_Name: Player
   m_TagString: Player
@@ -89,7 +90,7 @@ SpriteRenderer:
   m_LightmapParameters: {fileID: 0}
   m_GlobalIlluminationMeshLod: 0
   m_SortingLayerID: 127394023
-  m_SortingLayer: 3
+  m_SortingLayer: 4
   m_SortingOrder: 0
   m_MaskInteraction: 0
   m_Sprite: {fileID: -853932530, guid: d64aaa4c559e2f54680e624101a54bbd, type: 3}
@@ -241,6 +242,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerAttack
   attackKey: 323
   staminaCost: 15
+  attackCooldown: 0.12
+  attackIdleStateName: Attack_Idle
+  attackWalkStateName: Attack_Walk
+  attackRunStateName: Attack_Run
   hitboxDelay: 0.1
   hitboxActiveTime: 0.1
   attackHitbox: {fileID: 3980031116619861810}
@@ -261,6 +266,7 @@ MonoBehaviour:
   baseSortingOrder: 10000
   unitsToOrder: 100
   sortingOrderOffset: 1
+  sortPoint: {fileID: 0}
 --- !u!114 &7355530258458391649
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -274,7 +280,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Health
   maxHealth: 100
-  logDamage: 1
+  logDamage: 0
 --- !u!114 &5943821682197891390
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -306,6 +312,24 @@ MonoBehaviour:
   duration: 0.3
   easeOutPower: 1.5
   stopVelocityOnEnd: 1
+--- !u!114 &1628325410478862142
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 145695594477933479}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a4f3d0b6c7e840bd9ed6488a3a9fb4cc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerDeathController
+  mainMenuSceneName: MainMenu
+  deathTriggerParameter: Death
+  isDeadParameter: IsDead
+  deathAnimationDuration: 1.2
+  fadeOutDuration: 1
+  fadeCompletesAfterAnimationEnd: 0.2
 --- !u!1 &7866302684520984191
 GameObject:
   m_ObjectHideFlags: 0
@@ -383,7 +407,7 @@ BoxCollider2D:
     drawMode: 0
     adaptiveTiling: 0
   m_AutoTiling: 0
-  m_Size: {x: 0.17, y: 0.16}
+  m_Size: {x: 0.21, y: 0.2}
   m_EdgeRadius: 0
 --- !u!114 &3980031116619861810
 MonoBehaviour:

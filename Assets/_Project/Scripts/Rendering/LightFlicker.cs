@@ -16,6 +16,7 @@ public sealed class LightFlicker : MonoBehaviour
 
     private void Awake()
     {
+        EnsureSeed();
         CacheLight();
         CaptureBaseValues();
     }
@@ -60,6 +61,14 @@ public sealed class LightFlicker : MonoBehaviour
     private void Reset()
     {
         seed = Random.value * 1000f;
+    }
+
+    private void EnsureSeed()
+    {
+        if (Mathf.Approximately(seed, 0f))
+        {
+            seed = Random.value * 1000f;
+        }
     }
 
     private void OnValidate()

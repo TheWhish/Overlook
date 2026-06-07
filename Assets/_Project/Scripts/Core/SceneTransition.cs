@@ -41,7 +41,7 @@ public sealed class SceneTransition : MonoBehaviour
             return;
         }
 
-        GetOrCreate().StartSceneTransition(sceneName: null, buildIndex, useBuildIndex: true);
+        GetOrCreate().StartSceneTransition(sceneName: null, buildIndex, useBuildIndex: true, FadeOutDuration);
     }
 
     public static void LoadScene(string sceneName)
@@ -52,7 +52,18 @@ public sealed class SceneTransition : MonoBehaviour
             return;
         }
 
-        GetOrCreate().StartSceneTransition(sceneName, buildIndex: -1, useBuildIndex: false);
+        GetOrCreate().StartSceneTransition(sceneName, buildIndex: -1, useBuildIndex: false, FadeOutDuration);
+    }
+
+    public static void LoadScene(string sceneName, float fadeOutDuration)
+    {
+        if (string.IsNullOrWhiteSpace(sceneName))
+        {
+            Debug.LogWarning("SceneTransition could not load an empty scene name.");
+            return;
+        }
+
+        GetOrCreate().StartSceneTransition(sceneName, buildIndex: -1, useBuildIndex: false, fadeOutDuration);
     }
 
     private static SceneTransition GetOrCreate()
@@ -154,7 +165,7 @@ public sealed class SceneTransition : MonoBehaviour
         FinishTransition();
     }
 
-    private void StartSceneTransition(string sceneName, int buildIndex, bool useBuildIndex)
+    private void StartSceneTransition(string sceneName, int buildIndex, bool useBuildIndex, float fadeOutDuration)
     {
         if (isLoadingScene)
         {
@@ -166,17 +177,17 @@ public sealed class SceneTransition : MonoBehaviour
             StopCoroutine(activeRoutine);
         }
 
-        activeRoutine = StartCoroutine(SceneTransitionRoutine(sceneName, buildIndex, useBuildIndex));
+        activeRoutine = StartCoroutine(SceneTransitionRoutine(sceneName, buildIndex, useBuildIndex, fadeOutDuration));
     }
 
-    private IEnumerator SceneTransitionRoutine(string sceneName, int buildIndex, bool useBuildIndex)
+    private IEnumerator SceneTransitionRoutine(string sceneName, int buildIndex, bool useBuildIndex, float fadeOutDuration)
     {
         isTransitioning = true;
         isLoadingScene = true;
         GameplayInputGate.SetSceneTransitionBlocked(true);
         SetOverlayBlocking(true);
 
-        yield return FadeTo(1f, FadeOutDuration);
+        yield return FadeTo(1f, Mathf.Max(0f, fadeOutDuration));
 
         AsyncOperation loadOperation = useBuildIndex
             ? SceneManager.LoadSceneAsync(buildIndex)

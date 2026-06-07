@@ -26,6 +26,10 @@ public class EnemyHopAI : MonoBehaviour
     [SerializeField, Min(0f)] private float idleDurationMin = 0.4f;
     [SerializeField, Min(0f)] private float idleDurationMax = 1.2f;
 
+    [Header("Rhythm")]
+    [SerializeField, Min(0f)] private float aggressiveMinimumIdleDuration = 0.12f;
+    [SerializeField, Min(0f)] private float enrageMinimumIdleDuration = 0.1f;
+
     [Header("Aggression")]
     [SerializeField, Min(0f)] private float aggressionAfterDamageTime = 1.25f;
     [SerializeField, Min(0f)] private float aggressiveIdleDurationMax = 0.08f;
@@ -46,6 +50,8 @@ public class EnemyHopAI : MonoBehaviour
     [SerializeField, Min(0f)] private float attackPauseTime = 0.15f;
     [SerializeField] private bool retreatWhileAttackOnCooldown = true;
     [SerializeField, Range(0f, 1f)] private float retreatSideStepBlend = 0.35f;
+    [SerializeField, Min(0f)] private float retreatCooldownMinDistance = 0.14f;
+    [SerializeField, Range(0f, 1f)] private float retreatCooldownChance = 0.25f;
 
     [Header("Obstacle Avoidance")]
     [SerializeField] private LayerMask obstacleLayers = 1 << 9;
@@ -56,6 +62,10 @@ public class EnemyHopAI : MonoBehaviour
     [SerializeField, Min(0f)] private float obstacleEscapeProbeRadius = 0.18f;
     [SerializeField, Min(0f)] private float obstacleEscapeDistance = 0.18f;
     [SerializeField, Min(0.1f)] private float obstacleEscapeDurationMultiplier = 0.65f;
+
+    [Header("Room Awareness")]
+    [SerializeField] private bool keepPassiveMovementInsideZone = true;
+    [SerializeField, Min(0f)] private float zoneProbePadding = 0.04f;
 
     [Header("Adaptive Pressure")]
     [SerializeField, Range(0f, 1f)] private float playerLowHealthPercent = 0.35f;
@@ -72,6 +82,8 @@ public class EnemyHopAI : MonoBehaviour
     private EnemyDamageReaction damageReaction;
     private Health health;
     private Collider2D bodyCollider;
+    private RoomAwarenessMember awarenessMember;
+    private RoomAwarenessZone passiveHomeZone;
     private Coroutine hopRoutine;
 
     private void Awake()
@@ -82,6 +94,12 @@ public class EnemyHopAI : MonoBehaviour
         damageReaction = GetComponent<EnemyDamageReaction>();
         health = GetComponent<Health>();
         bodyCollider = GetComponent<Collider2D>();
+        awarenessMember = GetComponent<RoomAwarenessMember>();
+
+        if (awarenessMember == null)
+        {
+            awarenessMember = gameObject.AddComponent<RoomAwarenessMember>();
+        }
     }
 
     private void OnEnable()
@@ -201,12 +219,14 @@ public class EnemyHopAI : MonoBehaviour
     {
         if (IsAggressive())
         {
-            return Random.Range(0f, aggressiveIdleDurationMax) * GetTargetPressureIdleMultiplier();
+            float idleDuration = Random.Range(0f, aggressiveIdleDurationMax) * GetTargetPressureIdleMultiplier();
+            return Mathf.Max(aggressiveMinimumIdleDuration, idleDuration);
         }
 
         if (IsEnraged())
         {
-            return Random.Range(0f, enrageIdleDurationMax) * GetTargetPressureIdleMultiplier();
+            float idleDuration = Random.Range(0f, enrageIdleDurationMax) * GetTargetPressureIdleMultiplier();
+            return Mathf.Max(enrageMinimumIdleDuration, idleDuration);
         }
 
         return Random.Range(idleDurationMin, idleDurationMax) * GetTargetPressureIdleMultiplier();
@@ -293,11 +313,18 @@ public class EnemyHopAI : MonoBehaviour
             return true;
         }
 
-        return retreatWhileAttackOnCooldown
-            && meleeAttack != null
-            && !meleeAttack.IsReady
-            && !IsTargetVulnerable()
-            && meleeAttack.IsTargetInAttackArea(targetSensor.CurrentTargetCollider);
+        if (!retreatWhileAttackOnCooldown
+            || meleeAttack == null
+            || meleeAttack.IsReady
+            || IsTargetVulnerable()
+            || !meleeAttack.IsTargetInAttackArea(targetSensor.CurrentTargetCollider))
+        {
+            return false;
+        }
+
+        float retreatMinSqrDistance = retreatCooldownMinDistance * retreatCooldownMinDistance;
+        return targetSensor.GetSqrDistanceToTarget() <= retreatMinSqrDistance
+            && Random.value < retreatCooldownChance;
     }
 
     private Vector2 GetRetreatDirection()
@@ -478,7 +505,7 @@ public class EnemyHopAI : MonoBehaviour
 
         desiredDirection.Normalize();
 
-        if (!IsPathBlocked(desiredDirection, distance))
+        if (IsDirectionUsable(desiredDirection, distance))
         {
             return desiredDirection;
         }
@@ -494,7 +521,7 @@ public class EnemyHopAI : MonoBehaviour
         {
             Vector2 candidateDirection = Rotate(desiredDirection, DirectionFallbackAngles[i]);
 
-            if (!IsPathBlocked(candidateDirection, distance))
+            if (IsDirectionUsable(candidateDirection, distance))
             {
                 return candidateDirection;
             }
@@ -513,22 +540,22 @@ public class EnemyHopAI : MonoBehaviour
             ? new Vector2(0f, desiredDirection.y < 0f ? -1f : 1f)
             : new Vector2(desiredDirection.x < 0f ? -1f : 1f, 0f);
 
-        if (!IsPathBlocked(primaryDirection, distance))
+        if (IsDirectionUsable(primaryDirection, distance))
         {
             return primaryDirection;
         }
 
-        if (!IsPathBlocked(secondaryDirection, distance))
+        if (IsDirectionUsable(secondaryDirection, distance))
         {
             return secondaryDirection;
         }
 
-        if (!IsPathBlocked(-secondaryDirection, distance))
+        if (IsDirectionUsable(-secondaryDirection, distance))
         {
             return -secondaryDirection;
         }
 
-        if (!IsPathBlocked(-primaryDirection, distance))
+        if (IsDirectionUsable(-primaryDirection, distance))
         {
             return -primaryDirection;
         }
@@ -548,6 +575,61 @@ public class EnemyHopAI : MonoBehaviour
         RaycastHit2D hit = Physics2D.CircleCast(origin, obstacleProbeRadius, direction.normalized, checkDistance, obstacleLayers);
 
         return hit.collider != null;
+    }
+
+    private bool IsDirectionUsable(Vector2 direction, float distance)
+    {
+        return !IsPathBlocked(direction, distance)
+            && IsAllowedByAwarenessZone(direction, distance);
+    }
+
+    private bool IsAllowedByAwarenessZone(Vector2 direction, float distance)
+    {
+        if (!keepPassiveMovementInsideZone
+            || direction.sqrMagnitude <= 0.0001f
+            || targetSensor != null && targetSensor.HasEngagedTarget
+            || awarenessMember == null)
+        {
+            return true;
+        }
+
+        RoomAwarenessZone zone = GetPassiveHomeZone();
+
+        if (zone == null)
+        {
+            return true;
+        }
+
+        float checkDistance = Mathf.Max(0f, distance + zoneProbePadding);
+        Vector2 origin = GetObstacleProbeOrigin();
+        Vector2 targetPoint = origin + direction.normalized * checkDistance;
+
+        if (zone.ContainsPoint(origin))
+        {
+            return zone.ContainsPoint(targetPoint);
+        }
+
+        Vector2 closestPoint = zone.ClosestPoint(origin);
+        float currentSqrDistance = (closestPoint - origin).sqrMagnitude;
+        float nextSqrDistance = (closestPoint - targetPoint).sqrMagnitude;
+        return nextSqrDistance < currentSqrDistance;
+    }
+
+    private RoomAwarenessZone GetPassiveHomeZone()
+    {
+        if (awarenessMember == null)
+        {
+            return passiveHomeZone;
+        }
+
+        awarenessMember.RefreshCurrentZone();
+
+        if (awarenessMember.CurrentZone != null)
+        {
+            passiveHomeZone = awarenessMember.CurrentZone;
+        }
+
+        return passiveHomeZone;
     }
 
     private bool TryGetObstacleEscapeDirection(out Vector2 escapeDirection)
@@ -582,9 +664,44 @@ public class EnemyHopAI : MonoBehaviour
             return false;
         }
 
-        escapeDirection = awayFromObstacle.normalized;
+        if (!TryGetUsableEscapeDirection(awayFromObstacle.normalized, out escapeDirection))
+        {
+            return false;
+        }
+
         motor.FaceDirection(escapeDirection);
         return true;
+    }
+
+    private bool TryGetUsableEscapeDirection(Vector2 desiredDirection, out Vector2 escapeDirection)
+    {
+        escapeDirection = Vector2.zero;
+
+        if (desiredDirection.sqrMagnitude <= 0.0001f)
+        {
+            return false;
+        }
+
+        if (IsDirectionUsable(desiredDirection, obstacleEscapeDistance))
+        {
+            escapeDirection = desiredDirection;
+            return true;
+        }
+
+        int attempts = Mathf.Min(directionFallbackAttempts, DirectionFallbackAngles.Length);
+
+        for (int i = 0; i < attempts; i++)
+        {
+            Vector2 candidateDirection = Rotate(desiredDirection, DirectionFallbackAngles[i]);
+
+            if (IsDirectionUsable(candidateDirection, obstacleEscapeDistance))
+            {
+                escapeDirection = candidateDirection;
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private Vector2 GetObstacleProbeOrigin()
@@ -627,6 +744,8 @@ public class EnemyHopAI : MonoBehaviour
         idleDurationMin = Mathf.Max(0f, idleDurationMin);
         idleDurationMax = Mathf.Max(idleDurationMin, idleDurationMax);
         attackPauseTime = Mathf.Max(0f, attackPauseTime);
+        aggressiveMinimumIdleDuration = Mathf.Max(0f, aggressiveMinimumIdleDuration);
+        enrageMinimumIdleDuration = Mathf.Max(0f, enrageMinimumIdleDuration);
         aggressionAfterDamageTime = Mathf.Max(0f, aggressionAfterDamageTime);
         aggressiveIdleDurationMax = Mathf.Max(0f, aggressiveIdleDurationMax);
         aggressiveHopDurationMultiplier = Mathf.Max(0.1f, aggressiveHopDurationMultiplier);
@@ -640,6 +759,7 @@ public class EnemyHopAI : MonoBehaviour
         obstacleEscapeProbeRadius = Mathf.Max(0f, obstacleEscapeProbeRadius);
         obstacleEscapeDistance = Mathf.Max(0f, obstacleEscapeDistance);
         obstacleEscapeDurationMultiplier = Mathf.Max(0.1f, obstacleEscapeDurationMultiplier);
+        zoneProbePadding = Mathf.Max(0f, zoneProbePadding);
         playerLowHealthHopDurationMultiplier = Mathf.Max(0.1f, playerLowHealthHopDurationMultiplier);
         playerLowHealthHopDistanceMultiplier = Mathf.Max(0f, playerLowHealthHopDistanceMultiplier);
         playerLowHealthIdleMultiplier = Mathf.Max(0.1f, playerLowHealthIdleMultiplier);

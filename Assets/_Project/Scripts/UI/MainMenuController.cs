@@ -27,6 +27,8 @@ public sealed class MainMenuController : MonoBehaviour
 
     public void Play()
     {
+        GameplayInputGate.Clear();
+
         int currentBuildIndex = SceneManager.GetActiveScene().buildIndex;
         int nextBuildIndex = currentBuildIndex + 1;
 

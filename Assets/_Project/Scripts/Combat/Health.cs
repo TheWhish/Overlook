@@ -5,7 +5,7 @@ using UnityEngine;
 public class Health : MonoBehaviour, IDamageable
 {
     [SerializeField, Min(1f)] private float maxHealth = 100f;
-    [SerializeField] private bool logDamage = true;
+    [SerializeField] private bool logDamage;
 
     private float currentHealth;
     private bool isDead;
@@ -74,7 +74,7 @@ public class Health : MonoBehaviour, IDamageable
 
         if (logDamage)
         {
-            Debug.Log($"{name} took {damageAmount:0.#} damage. Health: {currentHealth:0.#}/{maxHealth:0.#}", this);
+            LogDamage($"{name} took {damageAmount:0.#} damage. Health: {currentHealth:0.#}/{maxHealth:0.#}");
         }
 
         if (currentHealth <= 0f)
@@ -97,8 +97,15 @@ public class Health : MonoBehaviour, IDamageable
 
         if (logDamage)
         {
-            Debug.Log($"{name} died.", this);
+            LogDamage($"{name} died.");
         }
+    }
+
+    [System.Diagnostics.Conditional("UNITY_EDITOR")]
+    [System.Diagnostics.Conditional("DEVELOPMENT_BUILD")]
+    private void LogDamage(string message)
+    {
+        Debug.Log(message, this);
     }
 
     private void OnValidate()

@@ -5,6 +5,7 @@ public static class GameplayInputGate
 {
     private static bool pauseBlocksGameplayInput;
     private static bool sceneTransitionBlocksGameplayInput;
+    private static bool playerDeathBlocksGameplayInput;
     private static bool waitForPrimaryPointerRelease;
     private static int blockedUntilFrame;
     private static float blockedUntilRealtime;
@@ -15,7 +16,7 @@ public static class GameplayInputGate
     {
         get
         {
-            if (pauseBlocksGameplayInput || sceneTransitionBlocksGameplayInput || Time.timeScale <= 0f)
+            if (pauseBlocksGameplayInput || sceneTransitionBlocksGameplayInput || playerDeathBlocksGameplayInput || Time.timeScale <= 0f)
             {
                 return true;
             }
@@ -54,6 +55,11 @@ public static class GameplayInputGate
         sceneTransitionBlocksGameplayInput = blocked;
     }
 
+    public static void SetPlayerDeathBlocked(bool blocked)
+    {
+        playerDeathBlocksGameplayInput = blocked;
+    }
+
     public static void BlockFor(float seconds, bool waitUntilPrimaryPointerReleased)
     {
         blockedUntilFrame = Mathf.Max(blockedUntilFrame, Time.frameCount + 1);
@@ -65,6 +71,7 @@ public static class GameplayInputGate
     {
         pauseBlocksGameplayInput = false;
         sceneTransitionBlocksGameplayInput = false;
+        playerDeathBlocksGameplayInput = false;
         waitForPrimaryPointerRelease = false;
         blockedUntilFrame = 0;
         blockedUntilRealtime = 0f;

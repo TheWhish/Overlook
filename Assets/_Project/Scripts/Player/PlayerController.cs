@@ -47,7 +47,19 @@ public class PlayerController : MonoBehaviour
 
     private void Update()
     {
-        if (GameplayInputGate.IsGameplayInputBlocked || IsMovementBlocked())
+        if (GameplayInputGate.IsGameplayInputBlocked)
+        {
+            StopMovement();
+            return;
+        }
+
+        if (IsKnockbackActive())
+        {
+            StopMovement(stopRigidbody: false);
+            return;
+        }
+
+        if (IsMovementBlocked())
         {
             StopMovement();
             return;
@@ -60,7 +72,22 @@ public class PlayerController : MonoBehaviour
 
     private void FixedUpdate()
     {
-        if (GameplayInputGate.IsGameplayInputBlocked || IsMovementBlocked())
+        if (GameplayInputGate.IsGameplayInputBlocked)
+        {
+            if (rb != null)
+            {
+                rb.linearVelocity = Vector2.zero;
+            }
+
+            return;
+        }
+
+        if (IsKnockbackActive())
+        {
+            return;
+        }
+
+        if (IsMovementBlocked())
         {
             if (rb != null)
             {
@@ -112,8 +139,12 @@ public class PlayerController : MonoBehaviour
 
     private bool IsMovementBlocked()
     {
-        return (hurtReaction != null && hurtReaction.BlocksMovement)
-            || (knockbackReceiver != null && knockbackReceiver.IsKnockbackActive);
+        return hurtReaction != null && hurtReaction.BlocksMovement;
+    }
+
+    private bool IsKnockbackActive()
+    {
+        return knockbackReceiver != null && knockbackReceiver.IsKnockbackActive;
     }
 
     private void UpdateAnimation()
@@ -154,13 +185,13 @@ public class PlayerController : MonoBehaviour
         animator.SetBool(IsRunningHash, false);
     }
 
-    private void StopMovement()
+    private void StopMovement(bool stopRigidbody = true)
     {
         moveInput = Vector2.zero;
         isRunning = false;
         currentSpeed = 0f;
 
-        if (rb != null)
+        if (stopRigidbody && rb != null)
         {
             rb.linearVelocity = Vector2.zero;
         }

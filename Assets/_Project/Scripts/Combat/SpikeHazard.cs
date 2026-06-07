@@ -8,8 +8,11 @@ public sealed class SpikeHazard : MonoBehaviour
 {
     [SerializeField, Min(0f)] private float damage = 15f;
     [SerializeField, Min(0f)] private float damageInterval = 0.45f;
+    [SerializeField] private bool shareCooldownAcrossHazards = true;
     [SerializeField] private LayerMask targetLayers = 1 << 6;
-    [SerializeField] private string[] activeSpriteNames = { "peaks_1", "peaks_2" };
+    [SerializeField] private string[] activeSpriteNames = { "spike_3", "spike_4" };
+
+    private static readonly Dictionary<IDamageable, float> SharedNextDamageTimes = new Dictionary<IDamageable, float>();
 
     private readonly List<IDamageable> overlappingTargets = new List<IDamageable>();
     private readonly Dictionary<IDamageable, float> nextDamageTimes = new Dictionary<IDamageable, float>();
@@ -72,6 +75,7 @@ public sealed class SpikeHazard : MonoBehaviour
                 if (target != null)
                 {
                     nextDamageTimes.Remove(target);
+                    SharedNextDamageTimes.Remove(target);
                 }
                 continue;
             }
@@ -137,14 +141,32 @@ public sealed class SpikeHazard : MonoBehaviour
             : Vector2.zero;
 
         target.TakeDamage(new DamageInfo(damage, gameObject, hitPoint, hitDirection));
-        nextDamageTimes[target] = Time.time + damageInterval;
+
+        float nextDamageTime = Time.time + damageInterval;
+        nextDamageTimes[target] = nextDamageTime;
+
+        if (shareCooldownAcrossHazards)
+        {
+            SharedNextDamageTimes[target] = nextDamageTime;
+        }
     }
 
     private float GetNextDamageTime(IDamageable target)
     {
-        return nextDamageTimes.TryGetValue(target, out float nextDamageTime)
+        float localNextDamageTime = nextDamageTimes.TryGetValue(target, out float nextDamageTime)
             ? nextDamageTime
             : 0f;
+
+        if (!shareCooldownAcrossHazards)
+        {
+            return localNextDamageTime;
+        }
+
+        float sharedNextDamageTime = SharedNextDamageTimes.TryGetValue(target, out float sharedTime)
+            ? sharedTime
+            : 0f;
+
+        return Mathf.Max(localNextDamageTime, sharedNextDamageTime);
     }
 
     private bool IsInTargetLayers(int layer)

@@ -13,7 +13,7 @@ public class PlayerAttackHitbox : MonoBehaviour
     [SerializeField] private bool drawGizmos = true;
 
     private BoxCollider2D hitboxCollider;
-    private readonly HashSet<Collider2D> hitTargets = new HashSet<Collider2D>();
+    private readonly HashSet<IDamageable> hitTargets = new HashSet<IDamageable>();
 
     private void Awake()
     {
@@ -42,19 +42,14 @@ public class PlayerAttackHitbox : MonoBehaviour
             return;
         }
 
-        if (hitTargets.Contains(other))
-        {
-            return;
-        }
-
-        hitTargets.Add(other);
-
         IDamageable damageable = other.GetComponentInParent<IDamageable>();
 
-        if (damageable == null || !damageable.CanTakeDamage)
+        if (damageable == null || !damageable.CanTakeDamage || hitTargets.Contains(damageable))
         {
             return;
         }
+
+        hitTargets.Add(damageable);
 
         Vector2 hitDirection = other.transform.position - transform.root.position;
         DamageInfo damageInfo = new DamageInfo(damage, transform.root.gameObject, other.ClosestPoint(transform.position), hitDirection);

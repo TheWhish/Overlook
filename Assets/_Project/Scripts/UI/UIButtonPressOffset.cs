@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.EventSystems;
+using TMPro;
 
 [DisallowMultipleComponent]
 public class UIButtonPressOffset : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPointerExitHandler
@@ -15,7 +16,10 @@ public class UIButtonPressOffset : MonoBehaviour, IPointerDownHandler, IPointerU
     {
         if (target == null)
         {
-            target = GetComponentInChildren<UnityEngine.UI.Text>(true)?.rectTransform;
+            TMP_Text tmpText = GetComponentInChildren<TMP_Text>(true);
+            target = tmpText != null
+                ? tmpText.rectTransform
+                : GetComponentInChildren<UnityEngine.UI.Text>(true)?.rectTransform;
         }
 
         CaptureRestingPosition();

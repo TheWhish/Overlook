@@ -22,6 +22,7 @@ GameObject:
   - component: {fileID: 6682182584824452711}
   - component: {fileID: 552567869806157798}
   - component: {fileID: 5305822749748631184}
+  - component: {fileID: 4626225338587014101}
   m_Layer: 8
   m_Name: Slime1
   m_TagString: Untagged
@@ -90,7 +91,7 @@ SpriteRenderer:
   m_LightmapParameters: {fileID: 0}
   m_GlobalIlluminationMeshLod: 0
   m_SortingLayerID: 127394023
-  m_SortingLayer: 3
+  m_SortingLayer: 4
   m_SortingOrder: 0
   m_MaskInteraction: 0
   m_Sprite: {fileID: 5500212406526450762, guid: 24478233870fa2f41885de692c4dc281, type: 3}
@@ -241,8 +242,10 @@ MonoBehaviour:
   linearMotionBlend: 0.18
   idleDurationMin: 0.25
   idleDurationMax: 0.7
+  aggressiveMinimumIdleDuration: 0.14
+  enrageMinimumIdleDuration: 0.12
   aggressionAfterDamageTime: 1.35
-  aggressiveIdleDurationMax: 0.05
+  aggressiveIdleDurationMax: 0.18
   aggressiveHopDurationMultiplier: 0.85
   aggressiveHopDistanceMultiplier: 1.15
   approachSideStepBlend: 0.2
@@ -255,7 +258,9 @@ MonoBehaviour:
   chaseTarget: 1
   attackPauseTime: 0.08
   retreatWhileAttackOnCooldown: 1
-  retreatSideStepBlend: 0.55
+  retreatSideStepBlend: 0.45
+  retreatCooldownMinDistance: 0.14
+  retreatCooldownChance: 0.18
   obstacleLayers:
     serializedVersion: 2
     m_Bits: 512
@@ -266,6 +271,8 @@ MonoBehaviour:
   obstacleEscapeProbeRadius: 0.18
   obstacleEscapeDistance: 0.18
   obstacleEscapeDurationMultiplier: 0.65
+  keepPassiveMovementInsideZone: 1
+  zoneProbePadding: 0.04
   playerLowHealthPercent: 0.35
   playerLowHealthIdleMultiplier: 0.55
   playerLowHealthHopDurationMultiplier: 0.9
@@ -288,6 +295,7 @@ MonoBehaviour:
   baseSortingOrder: 10000
   unitsToOrder: 100
   sortingOrderOffset: 0
+  sortPoint: {fileID: 0}
 --- !u!114 &990107095053063276
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -305,7 +313,25 @@ MonoBehaviour:
     m_Bits: 64
   detectionRange: 1.25
   scanInterval: 0.15
-  targetMemoryTime: 0.6
+  targetMemoryTime: 0.18
+  requireLineOfSight: 1
+  lineOfSightObstacleLayers:
+    serializedVersion: 2
+    m_Bits: 512
+  lineOfSightPadding: 0.02
+  useAwarenessZones: 1
+--- !u!114 &4626225338587014101
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1955510215824198439}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9aee557da44f47bc93f60a99a8861888, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!114 &8694339185658434540
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -318,7 +344,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c4cd53c6153140e2a9ab2f5a7d72ccf1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::EnemyMeleeAttack
-  damage: 20
+  damage: 10
   attackRange: 0.32
   attackCooldown: 0.5
   targetLayers:
