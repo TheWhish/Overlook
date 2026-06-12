@@ -81,7 +81,7 @@ SpriteRenderer:
   m_LightmapParameters: {fileID: 0}
   m_GlobalIlluminationMeshLod: 0
   m_SortingLayerID: -675298095
-  m_SortingLayer: 3
+  m_SortingLayer: 4
   m_SortingOrder: 0
   m_MaskInteraction: 0
   m_Sprite: {fileID: 21300000, guid: 505cd7a550fc2ea459e868dc22c2cc16, type: 3}
@@ -136,7 +136,7 @@ MonoBehaviour:
   m_Intensity: 0.58
   m_LightVolumeIntensity: 1
   m_LightVolumeEnabled: 0
-  m_ApplyToSortingLayers: 0700000000000000e5e09707e6e09707e7e09707e8e09707e9e09707eae09707d1c4bfd7
+  m_ApplyToSortingLayers: 07000000000000007934efcee5e09707e6e09707e7e09707e8e09707e9e09707eae09707d1c4bfd7
   m_LightCookieSprite: {fileID: 0}
   m_DeprecatedPointLightCookieSprite: {fileID: 0}
   m_LightOrder: 1

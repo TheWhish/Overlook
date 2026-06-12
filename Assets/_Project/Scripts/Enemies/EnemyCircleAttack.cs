@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 
 [DisallowMultipleComponent]
-public class EnemyMeleeAttack : MonoBehaviour
+public class EnemyCircleAttack : EnemyAttack
 {
     private enum AttackAreaShape
     {
@@ -58,11 +58,11 @@ public class EnemyMeleeAttack : MonoBehaviour
     private bool hasHorizontalParameter;
     private bool warnedAboutMissingAttackTrigger;
 
-    public float AttackRange => attackRange;
-    public bool IsReady => attackRoutine == null && Time.time >= nextAttackTime;
-    public bool IsAttacking => attackRoutine != null;
+    public override float AttackRange => attackRange;
+    public override bool IsReady => attackRoutine == null && Time.time >= nextAttackTime;
+    public override bool IsAttacking => attackRoutine != null;
     public float CurrentAttackRadius => currentAttackRadius;
-    public float RemainingCooldown => Mathf.Max(0f, nextAttackTime - Time.time);
+    public override float RemainingCooldown => Mathf.Max(0f, nextAttackTime - Time.time);
 
     private void Awake()
     {
@@ -79,7 +79,7 @@ public class EnemyMeleeAttack : MonoBehaviour
         ClearAttackState(stopRoutine: true);
     }
 
-    public bool IsTargetInRange(Transform target)
+    public override bool IsTargetInRange(Transform target)
     {
         if (target == null)
         {
@@ -98,7 +98,7 @@ public class EnemyMeleeAttack : MonoBehaviour
         return sqrDistance <= sqrRange;
     }
 
-    public bool IsTargetInRange(Collider2D targetCollider)
+    public override bool IsTargetInRange(Collider2D targetCollider)
     {
         if (targetCollider == null)
         {
@@ -112,7 +112,7 @@ public class EnemyMeleeAttack : MonoBehaviour
         return (closestPoint - origin).sqrMagnitude <= sqrRange;
     }
 
-    public bool IsTargetInAttackArea(Collider2D targetCollider)
+    public override bool IsTargetInAttackArea(Collider2D targetCollider)
     {
         if (targetCollider == null || !IsTargetInRange(targetCollider))
         {
@@ -126,7 +126,7 @@ public class EnemyMeleeAttack : MonoBehaviour
             endRadius + attackStartPadding);
     }
 
-    public bool TryAttack(Transform target)
+    public override bool TryAttack(Transform target)
     {
         if (target == null)
         {
@@ -149,7 +149,7 @@ public class EnemyMeleeAttack : MonoBehaviour
         return true;
     }
 
-    public bool TryAttack(Collider2D targetCollider)
+    public override bool TryAttack(Collider2D targetCollider)
     {
         if (!IsReady
             || targetCollider == null
@@ -166,7 +166,7 @@ public class EnemyMeleeAttack : MonoBehaviour
         return true;
     }
 
-    public void InterruptAttack(float cooldownMultiplier = 1f)
+    public override void InterruptAttack(float cooldownMultiplier = 1f)
     {
         ClearAttackState(stopRoutine: true);
         nextAttackTime = Time.time + attackCooldown * Mathf.Max(0f, cooldownMultiplier);

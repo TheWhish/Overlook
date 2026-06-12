@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 #if UNITY_EDITOR
 using System.IO;
@@ -42,16 +43,18 @@ public sealed class RoomFlowController : MonoBehaviour
 
     private sealed class GeneratedRoomNode
     {
-        public GeneratedRoomNode(GameObject prefab, string runtimeId, Vector2Int cell)
+        public GeneratedRoomNode(GameObject prefab, string runtimeId, Vector2Int cell, Vector3 worldPosition)
         {
             Prefab = prefab;
             RuntimeId = runtimeId;
             Cell = cell;
+            WorldPosition = worldPosition;
         }
 
         public GameObject Prefab { get; }
         public string RuntimeId { get; }
         public Vector2Int Cell { get; }
+        public Vector3 WorldPosition { get; }
         public RoomDefinition Definition { get; set; }
     }
 
@@ -61,17 +64,20 @@ public sealed class RoomFlowController : MonoBehaviour
         public GeneratedRoomNode Parent { get; set; }
         public RoomDirection ParentExit { get; set; }
         public Vector2Int Cell { get; set; }
+        public Vector3 WorldPosition { get; set; }
     }
 
     [Header("Prefabs")]
     [SerializeField] private GameObject playerPrefab;
-    [SerializeField] private GameObject slimePrefab;
+    [SerializeField] private List<GameObject> enemyPrefabs = new List<GameObject>();
     [SerializeField] private List<GameObject> roomPrefabs = new List<GameObject>();
 
     [Header("Generation")]
     [SerializeField, Min(1)] private int roomsToGenerate = 3;
     [SerializeField] private bool randomizeSeed = true;
     [SerializeField] private int seed;
+    [SerializeField] private bool alignRoomInstancesByExits = true;
+    [SerializeField, Min(0f)] private float roomConnectionGap;
     [SerializeField] private Vector2 roomSpacing = new Vector2(4f, 2.5f);
 
     [Header("Runtime")]
@@ -84,11 +90,14 @@ public sealed class RoomFlowController : MonoBehaviour
     [SerializeField, HideInInspector] private GameObject startRoomPrefab;
     [SerializeField, HideInInspector] private GameObject room01Prefab;
     [SerializeField, HideInInspector] private GameObject room02Prefab;
+    [FormerlySerializedAs("slimePrefab")]
+    [SerializeField, HideInInspector] private GameObject legacyEnemyPrefab;
 
     private readonly Dictionary<string, GeneratedRoomNode> generatedRoomsById = new Dictionary<string, GeneratedRoomNode>();
     private readonly Dictionary<Vector2Int, GeneratedRoomNode> generatedRoomsByCell = new Dictionary<Vector2Int, GeneratedRoomNode>();
     private readonly Dictionary<ExitKey, GeneratedRoomNode> generatedTransitions = new Dictionary<ExitKey, GeneratedRoomNode>();
     private readonly Dictionary<GameObject, RoomDirection[]> prefabExitsCache = new Dictionary<GameObject, RoomDirection[]>();
+    private readonly Dictionary<GameObject, Dictionary<RoomDirection, Vector3>> prefabExitPositionsCache = new Dictionary<GameObject, Dictionary<RoomDirection, Vector3>>();
     private readonly HashSet<string> completedRoomIds = new HashSet<string>();
 
     private Transform roomsRoot;
@@ -172,6 +181,7 @@ public sealed class RoomFlowController : MonoBehaviour
         generatedRoomsByCell.Clear();
         generatedTransitions.Clear();
         prefabExitsCache.Clear();
+        prefabExitPositionsCache.Clear();
         completedRoomIds.Clear();
         CompletedRoomCountChanged?.Invoke(CompletedRoomCount);
 
@@ -186,7 +196,7 @@ public sealed class RoomFlowController : MonoBehaviour
             return;
         }
 
-        GeneratedRoomNode startNode = AddGeneratedRoom(startRoom, Vector2Int.zero, 0);
+        GeneratedRoomNode startNode = AddGeneratedRoom(startRoom, Vector2Int.zero, 0, Vector3.zero);
         List<GameObject> reusableRooms = GetReusableRoomPrefabs(validRooms, startRoom);
         List<GameObject> unusedUniqueRooms = new List<GameObject>(reusableRooms);
         Shuffle(reusableRooms, random);
@@ -228,10 +238,10 @@ public sealed class RoomFlowController : MonoBehaviour
         LogGeneratedMap(generationSeed, startNode);
     }
 
-    private GeneratedRoomNode AddGeneratedRoom(GameObject roomPrefab, Vector2Int cell, int index)
+    private GeneratedRoomNode AddGeneratedRoom(GameObject roomPrefab, Vector2Int cell, int index, Vector3 worldPosition)
     {
         string runtimeId = GetUniqueRuntimeRoomId(roomPrefab, index);
-        GeneratedRoomNode node = new GeneratedRoomNode(roomPrefab, runtimeId, cell);
+        GeneratedRoomNode node = new GeneratedRoomNode(roomPrefab, runtimeId, cell, worldPosition);
         generatedRoomsById.Add(node.RuntimeId, node);
         generatedRoomsByCell.Add(cell, node);
         return node;
@@ -264,7 +274,7 @@ public sealed class RoomFlowController : MonoBehaviour
 
         PlacementOption selected = options[random.Next(options.Count)];
         placedPrefab = selected.RoomPrefab;
-        placedRoom = AddGeneratedRoom(selected.RoomPrefab, selected.Cell, placementIndex);
+        placedRoom = AddGeneratedRoom(selected.RoomPrefab, selected.Cell, placementIndex, selected.WorldPosition);
         Log($"Placement selected: {selected.Parent.RuntimeId}.{selected.ParentExit} -> {placedRoom.RuntimeId}.");
         return true;
     }
@@ -303,12 +313,15 @@ public sealed class RoomFlowController : MonoBehaviour
                         continue;
                     }
 
+                    Vector3 worldPosition = GetRoomWorldPosition(parent, parentExit, roomPrefab, requiredEntry, targetCell);
+
                     options.Add(new PlacementOption
                     {
                         RoomPrefab = roomPrefab,
                         Parent = parent,
                         ParentExit = parentExit,
-                        Cell = targetCell
+                        Cell = targetCell,
+                        WorldPosition = worldPosition
                     });
                 }
             }
@@ -317,12 +330,38 @@ public sealed class RoomFlowController : MonoBehaviour
         return options;
     }
 
+    private Vector3 GetRoomWorldPosition(
+        GeneratedRoomNode parent,
+        RoomDirection parentExit,
+        GameObject childPrefab,
+        RoomDirection childEntry,
+        Vector2Int targetCell)
+    {
+        if (!alignRoomInstancesByExits ||
+            parent == null ||
+            !TryGetPrefabExitLocalPosition(parent.Prefab, parentExit, out Vector3 parentExitLocalPosition) ||
+            !TryGetPrefabExitLocalPosition(childPrefab, childEntry, out Vector3 childEntryLocalPosition))
+        {
+            return GetFallbackRoomWorldPosition(targetCell);
+        }
+
+        Vector2Int cellOffset = RoomDirectionUtility.ToCellOffset(parentExit);
+        Vector3 gapOffset = new Vector3(cellOffset.x, cellOffset.y, 0f) * roomConnectionGap;
+        Vector3 worldPosition = parent.WorldPosition + parentExitLocalPosition - childEntryLocalPosition + gapOffset;
+        worldPosition.z = 0f;
+        return worldPosition;
+    }
+
+    private Vector3 GetFallbackRoomWorldPosition(Vector2Int cell)
+    {
+        return new Vector3(cell.x * roomSpacing.x, cell.y * roomSpacing.y, 0f);
+    }
+
     private void InstantiateGeneratedRooms()
     {
         foreach (GeneratedRoomNode node in generatedRoomsById.Values)
         {
-            Vector3 worldPosition = new Vector3(node.Cell.x * roomSpacing.x, node.Cell.y * roomSpacing.y, 0f);
-            GameObject roomObject = Instantiate(node.Prefab, worldPosition, Quaternion.identity, roomsRoot);
+            GameObject roomObject = Instantiate(node.Prefab, node.WorldPosition, Quaternion.identity, roomsRoot);
             roomObject.name = node.RuntimeId;
 
             RoomDefinition roomDefinition = roomObject.GetComponent<RoomDefinition>();
@@ -407,10 +446,10 @@ public sealed class RoomFlowController : MonoBehaviour
         TeleportPlayer(spawnPosition);
         SnapCameraToRoom(activeRoom.Definition);
 
-        int spawnedEnemies = activeRoom.Definition.SpawnEnemiesOnce(slimePrefab, enemySpawnRadius, entryDirection);
+        int spawnedEnemies = activeRoom.Definition.SpawnEnemiesOnce(enemyPrefabs, enemySpawnRadius, entryDirection);
         nextAllowedTransitionTime = Time.unscaledTime + transitionCooldown;
 
-        Log($"Room entered: {activeRoom.RuntimeId}. Cell: {activeRoom.Cell}. Entry: {entryDirection}. Slimes spawned now: {spawnedEnemies}.");
+        Log($"Room entered: {activeRoom.RuntimeId}. Cell: {activeRoom.Cell}. Entry: {entryDirection}. Enemies spawned now: {spawnedEnemies}.");
     }
 
     private PlayerController FindOrCreatePlayer()
@@ -433,7 +472,38 @@ public sealed class RoomFlowController : MonoBehaviour
             playerObject.AddComponent<RoomAwarenessMember>();
         }
 
+        ResetPlayerForNewRun(playerObject);
+
         return playerObject.GetComponent<PlayerController>();
+    }
+
+    private void ResetPlayerForNewRun(GameObject playerObject)
+    {
+        if (playerObject == null)
+        {
+            return;
+        }
+
+        PlayerHurtReaction hurtReaction = playerObject.GetComponent<PlayerHurtReaction>();
+
+        if (hurtReaction != null)
+        {
+            hurtReaction.ResetReaction();
+        }
+
+        PlayerDeathController deathController = playerObject.GetComponent<PlayerDeathController>();
+
+        if (deathController != null)
+        {
+            deathController.ResetDeathState();
+        }
+
+        Health playerHealth = playerObject.GetComponent<Health>();
+
+        if (playerHealth != null)
+        {
+            playerHealth.RestoreToFull();
+        }
     }
 
     private Collider2D GetPlayerCollider()
@@ -597,6 +667,52 @@ public sealed class RoomFlowController : MonoBehaviour
         return exits;
     }
 
+    private bool TryGetPrefabExitLocalPosition(GameObject roomPrefab, RoomDirection direction, out Vector3 localPosition)
+    {
+        localPosition = Vector3.zero;
+
+        if (roomPrefab == null || direction == RoomDirection.None)
+        {
+            return false;
+        }
+
+        Dictionary<RoomDirection, Vector3> exitPositions = GetPrefabExitLocalPositions(roomPrefab);
+        return exitPositions.TryGetValue(direction, out localPosition);
+    }
+
+    private Dictionary<RoomDirection, Vector3> GetPrefabExitLocalPositions(GameObject roomPrefab)
+    {
+        if (prefabExitPositionsCache.TryGetValue(roomPrefab, out Dictionary<RoomDirection, Vector3> cachedPositions))
+        {
+            return cachedPositions;
+        }
+
+        Dictionary<RoomDirection, Vector3> positions = new Dictionary<RoomDirection, Vector3>();
+        Transform[] children = roomPrefab.GetComponentsInChildren<Transform>(true);
+
+        for (int i = 0; i < children.Length; i++)
+        {
+            Transform child = children[i];
+
+            if (!child.name.StartsWith("Exit") || child.GetComponent<Collider2D>() == null)
+            {
+                continue;
+            }
+
+            if (!RoomDirectionUtility.TryParseFromName(child.name, out RoomDirection direction) ||
+                direction == RoomDirection.None ||
+                positions.ContainsKey(direction))
+            {
+                continue;
+            }
+
+            positions.Add(direction, roomPrefab.transform.InverseTransformPoint(child.position));
+        }
+
+        prefabExitPositionsCache.Add(roomPrefab, positions);
+        return positions;
+    }
+
     private bool PrefabHasExit(GameObject roomPrefab, RoomDirection direction)
     {
         RoomDirection[] exits = GetPrefabExitDirections(roomPrefab);
@@ -614,13 +730,29 @@ public sealed class RoomFlowController : MonoBehaviour
 
     private void MigrateLegacyRoomFields()
     {
+        enemyPrefabs ??= new List<GameObject>();
+        roomPrefabs ??= new List<GameObject>();
+
+        AddEnemyPrefabIfNeeded(legacyEnemyPrefab);
         AddRoomPrefabIfNeeded(startRoomPrefab);
         AddRoomPrefabIfNeeded(room01Prefab);
         AddRoomPrefabIfNeeded(room02Prefab);
     }
 
+    private void AddEnemyPrefabIfNeeded(GameObject enemyPrefab)
+    {
+        enemyPrefabs ??= new List<GameObject>();
+
+        if (enemyPrefab != null && !enemyPrefabs.Contains(enemyPrefab))
+        {
+            enemyPrefabs.Add(enemyPrefab);
+        }
+    }
+
     private void AddRoomPrefabIfNeeded(GameObject roomPrefab)
     {
+        roomPrefabs ??= new List<GameObject>();
+
         if (roomPrefab != null && !roomPrefabs.Contains(roomPrefab))
         {
             roomPrefabs.Add(roomPrefab);
@@ -692,6 +824,7 @@ public sealed class RoomFlowController : MonoBehaviour
         entrySpawnPadding = Mathf.Max(0f, entrySpawnPadding);
         enemySpawnRadius = Mathf.Max(0f, enemySpawnRadius);
         transitionCooldown = Mathf.Max(0f, transitionCooldown);
+        roomConnectionGap = Mathf.Max(0f, roomConnectionGap);
         roomSpacing.x = Mathf.Max(0.1f, roomSpacing.x);
         roomSpacing.y = Mathf.Max(0.1f, roomSpacing.y);
 
@@ -703,13 +836,20 @@ public sealed class RoomFlowController : MonoBehaviour
     private void AutoAssignEditorPrefabs()
     {
 #if UNITY_EDITOR
+        enemyPrefabs ??= new List<GameObject>();
+        roomPrefabs ??= new List<GameObject>();
+
         playerPrefab = playerPrefab != null
             ? playerPrefab
             : AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/Player.prefab");
 
-        slimePrefab = slimePrefab != null
-            ? slimePrefab
-            : AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/Slime1.prefab");
+        string[] enemyGuids = AssetDatabase.FindAssets("t:Prefab", new[] { "Assets/_Project/Prefabs/Enemies" });
+
+        for (int i = 0; i < enemyGuids.Length; i++)
+        {
+            string path = AssetDatabase.GUIDToAssetPath(enemyGuids[i]);
+            AddEnemyPrefabIfNeeded(AssetDatabase.LoadAssetAtPath<GameObject>(path));
+        }
 
         AddRoomPrefabIfNeeded(AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/Rooms/Room_Start.prefab"));
 

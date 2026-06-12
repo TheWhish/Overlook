@@ -752,7 +752,7 @@ Camera:
   far clip plane: 1000
   field of view: 34
   orthographic: 1
-  orthographic size: 0.9
+  orthographic size: 1.2
   m_Depth: -1
   m_CullingMask:
     serializedVersion: 2
@@ -797,9 +797,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Unity.RenderPipelines.Universal.2D.Runtime::UnityEngine.Rendering.Universal.PixelPerfectCamera
   m_ComponentVersion: 1
   m_AssetsPPU: 100
-  m_RefResolutionX: 320
-  m_RefResolutionY: 180
-  m_CropFrame: 3
+  m_RefResolutionX: 384
+  m_RefResolutionY: 216
+  m_CropFrame: 0
   m_GridSnapping: 0
   m_FilterMode: 0
   m_UpscaleRT: 0
@@ -871,7 +871,7 @@ MonoBehaviour:
   m_Intensity: 0.26
   m_LightVolumeIntensity: 1
   m_LightVolumeEnabled: 0
-  m_ApplyToSortingLayers: 00000000e5e09707e6e09707d1c4bfd7e7e09707e8e09707e9e09707eae09707
+  m_ApplyToSortingLayers: 00000000e5e09707e6e09707d1c4bfd7e7e09707e8e09707e9e09707eae097077934efce
   m_LightCookieSprite: {fileID: 0}
   m_DeprecatedPointLightCookieSprite: {fileID: 0}
   m_LightOrder: 0
@@ -2493,15 +2493,21 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   playerPrefab: {fileID: 145695594477933479, guid: 98d598d11aa837a4fb36146fdb69b6a5, type: 3}
-  slimePrefab: {fileID: 1955510215824198439, guid: 59b002c16cc7dd74083c1e6f4db6e5d1, type: 3}
+  enemyPrefabs:
+  - {fileID: 1955510215824198439, guid: 59b002c16cc7dd74083c1e6f4db6e5d1, type: 3}
+  - {fileID: 1955510215824198439, guid: 1724460c3dae3f94b9d0b1ed53ad9074, type: 3}
   roomPrefabs:
   - {fileID: 8206855131514300236, guid: c986a107f06052c4a8cedcb86eab1568, type: 3}
   - {fileID: 8206855131514300236, guid: 3bc4eab116ace234086f4d53a1d391b2, type: 3}
   - {fileID: 8206855131514300236, guid: 4420dd47e47ae0d4eb124eedef070abe, type: 3}
+  - {fileID: 8206855131514300236, guid: 1fcefd9923f8dbf4dba12d34535ca87b, type: 3}
+  - {fileID: 8206855131514300236, guid: 1c5695fc1da6bc44a9d45ab1b8bfe9d5, type: 3}
   roomsToGenerate: 30
   randomizeSeed: 1
   seed: 0
-  roomSpacing: {x: 4, y: 2.5}
+  alignRoomInstancesByExits: 1
+  roomConnectionGap: 0.26
+  roomSpacing: {x: 8, y: 5}
   cameraOffset: {x: 0, y: 0}
   entrySpawnPadding: 0
   enemySpawnRadius: 0.12
@@ -2510,6 +2516,7 @@ MonoBehaviour:
   startRoomPrefab: {fileID: 8206855131514300236, guid: c986a107f06052c4a8cedcb86eab1568, type: 3}
   room01Prefab: {fileID: 8206855131514300236, guid: 3bc4eab116ace234086f4d53a1d391b2, type: 3}
   room02Prefab: {fileID: 8206855131514300236, guid: 4420dd47e47ae0d4eb124eedef070abe, type: 3}
+  legacyEnemyPrefab: {fileID: 1955510215824198439, guid: 59b002c16cc7dd74083c1e6f4db6e5d1, type: 3}
 --- !u!1 &3501000000
 GameObject:
   m_ObjectHideFlags: 0
@@ -2724,8 +2731,8 @@ SceneRoots:
   m_Roots:
   - {fileID: 519420032}
   - {fileID: 619394802}
-  - {fileID: 4058559738134799411}
+  - {fileID: 3201000001}
   - {fileID: 3401000001}
+  - {fileID: 4058559738134799411}
   - {fileID: 7517083}
   - {fileID: 3107000001}
-  - {fileID: 3201000001}

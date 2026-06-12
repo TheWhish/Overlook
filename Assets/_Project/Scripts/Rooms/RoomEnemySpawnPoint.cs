@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 [DisallowMultipleComponent]
@@ -19,14 +20,12 @@ public sealed class RoomEnemySpawnPoint : MonoBehaviour
             return false;
         }
 
-        RoomDirection disabledDirection = disableWhenEnteringFrom;
-
-        if (disabledDirection == RoomDirection.None)
+        if (disableWhenEnteringFrom == entryDirection)
         {
-            TryInferDisabledEntryDirection(markerName, out disabledDirection);
+            return true;
         }
 
-        return disabledDirection == entryDirection;
+        return IsMarkerDisabledForEntry(markerName, entryDirection);
     }
 
     public float GetSpawnRadius(float defaultRadius)
@@ -38,27 +37,95 @@ public sealed class RoomEnemySpawnPoint : MonoBehaviour
     {
         direction = RoomDirection.None;
 
-        if (string.IsNullOrWhiteSpace(markerName) || !markerName.StartsWith("EnemySpawn"))
+        if (!TryGetMarkerTokens(markerName, out string[] tokens))
         {
             return false;
         }
 
-        string markerSuffix = markerName.Substring("EnemySpawn".Length).TrimStart('_', '-', ' ');
+        for (int i = 0; i < tokens.Length; i++)
+        {
+            if (ShouldIgnoreMarkerToken(tokens[i]))
+            {
+                continue;
+            }
 
-        if (string.IsNullOrWhiteSpace(markerSuffix))
+            if (TryParseDirectionToken(tokens[i], out direction))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public static bool IsMarkerDisabledForEntry(string markerName, RoomDirection entryDirection)
+    {
+        if (entryDirection == RoomDirection.None || !TryGetMarkerTokens(markerName, out string[] tokens))
         {
             return false;
         }
 
-        int separatorIndex = markerSuffix.IndexOfAny(new[] { '_', '-', ' ' });
-        string firstToken = separatorIndex >= 0 ? markerSuffix.Substring(0, separatorIndex) : markerSuffix;
+        for (int i = 0; i < tokens.Length; i++)
+        {
+            string token = tokens[i];
 
-        return TryParseDirectionToken(firstToken, out direction);
+            if (ShouldIgnoreMarkerToken(token))
+            {
+                continue;
+            }
+
+            if (TryParseDirectionToken(token, out RoomDirection disabledDirection) &&
+                disabledDirection == entryDirection)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool TryGetMarkerTokens(string markerName, out string[] tokens)
+    {
+        tokens = null;
+
+        if (string.IsNullOrWhiteSpace(markerName) ||
+            !markerName.StartsWith("EnemySpawn", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        tokens = markerName.Split('_');
+        return tokens.Length > 0;
+    }
+
+    private static bool ShouldIgnoreMarkerToken(string token)
+    {
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            return true;
+        }
+
+        string normalizedToken = token.Trim();
+
+        if (string.Equals(normalizedToken, "EnemySpawn", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        for (int i = 0; i < normalizedToken.Length; i++)
+        {
+            if (!char.IsDigit(normalizedToken[i]))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static bool TryParseDirectionToken(string token, out RoomDirection direction)
     {
-        switch (token.ToLowerInvariant())
+        switch (token.Trim().ToLowerInvariant())
         {
             case "left":
                 direction = RoomDirection.Left;

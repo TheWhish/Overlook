@@ -34,6 +34,7 @@ public class EnemyTargetSensor : MonoBehaviour
     public bool HasKnownTarget => HasTarget || Time.time - lastTargetSeenTime <= targetMemoryTime;
     public bool HasEngagedTarget => hasEngagedTarget;
     public Vector2 LastKnownTargetPosition => lastKnownTargetPosition;
+    public Vector2 KnownTargetPoint => HasTarget ? GetCurrentTargetPoint() : lastKnownTargetPosition;
     public float DetectionRange => detectionRange;
 
     private void Awake()
@@ -128,7 +129,14 @@ public class EnemyTargetSensor : MonoBehaviour
 
             IDamageable damageable = hit.GetComponentInParent<IDamageable>();
 
-            if (damageable == null || !damageable.CanTakeDamage)
+            if (damageable == null)
+            {
+                continue;
+            }
+
+            Health targetHealth = hit.GetComponentInParent<Health>();
+
+            if (targetHealth != null && targetHealth.IsDead)
             {
                 continue;
             }
@@ -208,6 +216,15 @@ public class EnemyTargetSensor : MonoBehaviour
         }
 
         RoomAwarenessMember targetMember = targetCollider.GetComponentInParent<RoomAwarenessMember>();
+
+        if (targetMember == null)
+        {
+            Transform targetRoot = targetCollider.attachedRigidbody != null
+                ? targetCollider.attachedRigidbody.transform
+                : targetCollider.transform.root;
+
+            targetMember = targetRoot.gameObject.AddComponent<RoomAwarenessMember>();
+        }
 
         if (targetMember != null)
         {

@@ -39,6 +39,7 @@ public sealed class PlayerDeathController : MonoBehaviour
     private bool hasSpeedParameter;
     private bool hasIsRunningParameter;
     private bool isDying;
+    private bool disabledHurtReactionForDeath;
 
     private void Awake()
     {
@@ -54,6 +55,7 @@ public sealed class PlayerDeathController : MonoBehaviour
     private void OnEnable()
     {
         health.Died += HandleDied;
+        ResetDeathStateIfAlive();
     }
 
     private void OnDisable()
@@ -101,6 +103,7 @@ public sealed class PlayerDeathController : MonoBehaviour
 
         if (hurtReaction != null)
         {
+            disabledHurtReactionForDeath = hurtReaction.enabled;
             hurtReaction.enabled = false;
         }
 
@@ -135,6 +138,59 @@ public sealed class PlayerDeathController : MonoBehaviour
         }
 
         Debug.LogWarning($"Animator on {name} has no '{deathTriggerParameter}' trigger parameter.", this);
+    }
+
+    public void ResetDeathState()
+    {
+        isDying = false;
+        GameplayInputGate.SetPlayerDeathBlocked(false);
+
+        if (playerAttack != null)
+        {
+            playerAttack.CancelAttack();
+        }
+
+        if (disabledHurtReactionForDeath && hurtReaction != null)
+        {
+            hurtReaction.enabled = true;
+        }
+
+        disabledHurtReactionForDeath = false;
+
+        if (body != null)
+        {
+            body.linearVelocity = Vector2.zero;
+        }
+
+        if (hasDeathTrigger)
+        {
+            animator.ResetTrigger(deathTriggerHash);
+        }
+
+        if (hasIsDeadParameter)
+        {
+            animator.SetBool(isDeadHash, false);
+        }
+
+        if (hasSpeedParameter)
+        {
+            animator.SetFloat(speedHash, 0f);
+        }
+
+        if (hasIsRunningParameter)
+        {
+            animator.SetBool(isRunningHash, false);
+        }
+    }
+
+    private void ResetDeathStateIfAlive()
+    {
+        if (health != null && health.IsDead)
+        {
+            return;
+        }
+
+        ResetDeathState();
     }
 
     private void CacheAnimatorParameters()

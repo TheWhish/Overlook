@@ -144,7 +144,7 @@ public sealed class RoomDefinition : MonoBehaviour
         return transform.position;
     }
 
-    public int SpawnEnemiesOnce(GameObject defaultEnemyPrefab, float defaultSpawnRadius, RoomDirection entryDirection)
+    public int SpawnEnemiesOnce(IReadOnlyList<GameObject> defaultEnemyPrefabs, float defaultSpawnRadius, RoomDirection entryDirection)
     {
         if (enemiesSpawned)
         {
@@ -153,7 +153,7 @@ public sealed class RoomDefinition : MonoBehaviour
 
         enemiesSpawned = true;
 
-        if (defaultEnemyPrefab == null || enemySpawnPoints == null || enemySpawnPoints.Length == 0)
+        if (enemySpawnPoints == null || enemySpawnPoints.Length == 0)
         {
             return 0;
         }
@@ -180,7 +180,12 @@ public sealed class RoomDefinition : MonoBehaviour
 
             GameObject enemyPrefab = spawnConfig != null && spawnConfig.EnemyPrefab != null
                 ? spawnConfig.EnemyPrefab
-                : defaultEnemyPrefab;
+                : GetRandomDefaultEnemyPrefab(defaultEnemyPrefabs);
+
+            if (enemyPrefab == null)
+            {
+                continue;
+            }
 
             int spawnCount = spawnConfig != null ? spawnConfig.SpawnCount : 1;
             float spawnRadius = spawnConfig != null ? spawnConfig.GetSpawnRadius(fallbackRadius) : fallbackRadius;
@@ -204,6 +209,28 @@ public sealed class RoomDefinition : MonoBehaviour
         }
 
         return spawnedCount;
+    }
+
+    private static GameObject GetRandomDefaultEnemyPrefab(IReadOnlyList<GameObject> defaultEnemyPrefabs)
+    {
+        if (defaultEnemyPrefabs == null || defaultEnemyPrefabs.Count == 0)
+        {
+            return null;
+        }
+
+        int startIndex = Random.Range(0, defaultEnemyPrefabs.Count);
+
+        for (int i = 0; i < defaultEnemyPrefabs.Count; i++)
+        {
+            GameObject enemyPrefab = defaultEnemyPrefabs[(startIndex + i) % defaultEnemyPrefabs.Count];
+
+            if (enemyPrefab != null)
+            {
+                return enemyPrefab;
+            }
+        }
+
+        return null;
     }
 
     private void RemoveFinishedEnemies()
@@ -231,8 +258,7 @@ public sealed class RoomDefinition : MonoBehaviour
             return spawnConfig.IsDisabledForEntry(entryDirection, spawnPoint.name);
         }
 
-        return RoomEnemySpawnPoint.TryInferDisabledEntryDirection(spawnPoint.name, out RoomDirection disabledDirection) &&
-               disabledDirection == entryDirection;
+        return RoomEnemySpawnPoint.IsMarkerDisabledForEntry(spawnPoint.name, entryDirection);
     }
 
     private Transform GetRuntimeEnemiesRoot()

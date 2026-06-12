@@ -91,7 +91,7 @@ SpriteRenderer:
   m_LightmapParameters: {fileID: 0}
   m_GlobalIlluminationMeshLod: 0
   m_SortingLayerID: 127394023
-  m_SortingLayer: 4
+  m_SortingLayer: 5
   m_SortingOrder: 0
   m_MaskInteraction: 0
   m_Sprite: {fileID: 5500212406526450762, guid: 24478233870fa2f41885de692c4dc281, type: 3}
@@ -242,44 +242,41 @@ MonoBehaviour:
   linearMotionBlend: 0.18
   idleDurationMin: 0.25
   idleDurationMax: 0.7
-  aggressiveMinimumIdleDuration: 0.14
-  enrageMinimumIdleDuration: 0.12
-  aggressionAfterDamageTime: 1.35
-  aggressiveIdleDurationMax: 0.18
-  aggressiveHopDurationMultiplier: 0.85
-  aggressiveHopDistanceMultiplier: 1.15
-  approachSideStepBlend: 0.2
-  aggressiveApproachSideStepBlend: 0.45
-  enrageHealthPercent: 0.35
-  enrageIdleDurationMax: 0.12
-  enrageHopDurationMultiplier: 0.8
-  enrageHopDistanceMultiplier: 1.2
-  allowDiagonalMovement: 1
-  chaseTarget: 1
+  engagedIdleDurationMin: 0.06
+  engagedIdleDurationMax: 0.18
   attackPauseTime: 0.08
-  retreatWhileAttackOnCooldown: 1
-  retreatSideStepBlend: 0.45
-  retreatCooldownMinDistance: 0.14
-  retreatCooldownChance: 0.18
+  dodgeChance: 0.22
+  lowHealthDodgeChance: 0.42
+  sideStepChance: 0.5
+  attackReadyApproachBias: 0.75
+  cooldownRetreatBias: 0.45
+  preferredAttackDistanceMultiplier: 0.72
+  tooCloseDistanceMultiplier: 0.42
+  aggressionAfterDamageTime: 1.35
+  aggressiveHopDurationMultiplier: 0.9
+  aggressiveHopDistanceMultiplier: 1.05
+  enrageHealthPercent: 0.35
+  enrageHopDurationMultiplier: 0.88
+  enrageHopDistanceMultiplier: 1.05
+  playerLowHealthPercent: 0.35
+  playerLowHealthIdleMultiplier: 0.65
+  playerLowHealthHopDurationMultiplier: 0.95
+  playerLowHealthHopDistanceMultiplier: 1
+  selfCriticalHealthPercent: 0.22
   obstacleLayers:
     serializedVersion: 2
     m_Bits: 512
-  obstacleProbeRadius: 0.06
+  obstacleProbeRadius: 0.07
   obstacleProbePadding: 0.08
-  directionFallbackAttempts: 7
-  blockedIdleDuration: 0.12
-  obstacleEscapeProbeRadius: 0.18
-  obstacleEscapeDistance: 0.18
-  obstacleEscapeDurationMultiplier: 0.65
+  endpointClearanceRadius: 0.08
+  blockedIdleDuration: 0.08
+  obstacleEscapeProbeRadius: 0.2
+  obstacleEscapeDistance: 0.2
   keepPassiveMovementInsideZone: 1
+  keepCombatMovementInsideZone: 1
   zoneProbePadding: 0.04
-  playerLowHealthPercent: 0.35
-  playerLowHealthIdleMultiplier: 0.55
-  playerLowHealthHopDurationMultiplier: 0.9
-  playerLowHealthHopDistanceMultiplier: 1.1
-  selfCriticalHealthPercent: 0.22
-  selfCriticalRetreatChance: 0.45
-  selfCriticalSideStepBlend: 0.72
+  drawDebugGizmos: 1
+  drawRuntimeDebugLines: 0
 --- !u!114 &2574983367187515509
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -343,7 +340,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: c4cd53c6153140e2a9ab2f5a7d72ccf1, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::EnemyMeleeAttack
+  m_EditorClassIdentifier: Assembly-CSharp::EnemyCircleAttack
   damage: 10
   attackRange: 0.32
   attackCooldown: 0.5

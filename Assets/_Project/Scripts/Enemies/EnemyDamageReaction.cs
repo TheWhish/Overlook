@@ -27,7 +27,7 @@ public class EnemyDamageReaction : MonoBehaviour
     private Health health;
     private Animator animator;
     private EnemyMotor motor;
-    private EnemyMeleeAttack meleeAttack;
+    private EnemyAttack enemyAttack;
     private KnockbackReceiver knockbackReceiver;
     private Rigidbody2D rb;
     private Collider2D[] colliders;
@@ -57,7 +57,7 @@ public class EnemyDamageReaction : MonoBehaviour
         health = GetComponent<Health>();
         animator = GetComponent<Animator>();
         motor = GetComponent<EnemyMotor>();
-        meleeAttack = GetComponent<EnemyMeleeAttack>();
+        enemyAttack = GetComponent<EnemyAttack>();
         knockbackReceiver = GetComponent<KnockbackReceiver>();
         rb = GetComponent<Rigidbody2D>();
         colliders = GetComponents<Collider2D>();
@@ -142,9 +142,9 @@ public class EnemyDamageReaction : MonoBehaviour
             motor.Stop();
         }
 
-        if (interruptAttackOnHurt && meleeAttack != null)
+        if (interruptAttackOnHurt && enemyAttack != null)
         {
-            meleeAttack.InterruptAttack(attackCooldownOnHurtMultiplier);
+            enemyAttack.InterruptAttack(attackCooldownOnHurtMultiplier);
         }
 
         StopPhysicsVelocity();
@@ -297,7 +297,7 @@ public class EnemyDamageReaction : MonoBehaviour
                 || behaviour is EnemyHopAI
                 || behaviour is EnemyWanderAI
                 || behaviour is EnemyTargetSensor
-                || behaviour is EnemyMeleeAttack
+                || behaviour is EnemyAttack
                 || behaviour is KnockbackReceiver)
             {
                 behaviour.enabled = false;

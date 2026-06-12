@@ -266,7 +266,16 @@ public class PlayerAttack : MonoBehaviour
             attackHitbox.DisableHitbox();
         }
 
-        animator.SetBool(IsAttackingHash, false);
+        if (animator == null)
+        {
+            animator = GetComponent<Animator>();
+        }
+
+        if (animator != null)
+        {
+            animator.SetBool(IsAttackingHash, false);
+        }
+
         facingLockUntil = 0f;
     }
 

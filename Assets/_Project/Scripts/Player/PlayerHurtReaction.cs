@@ -20,6 +20,7 @@ public class PlayerHurtReaction : MonoBehaviour
     private PlayerAttack playerAttack;
     private KnockbackReceiver knockbackReceiver;
     private Coroutine hurtRoutine;
+    private bool isBlockingIncomingDamage;
 
     private int hurtTriggerHash;
     private int horizontalHash;
@@ -50,12 +51,18 @@ public class PlayerHurtReaction : MonoBehaviour
     private void OnDisable()
     {
         health.Damaged -= HandleDamaged;
+        ResetReaction();
+    }
 
+    public void ResetReaction()
+    {
         if (hurtRoutine != null)
         {
             StopCoroutine(hurtRoutine);
             hurtRoutine = null;
         }
+
+        SetIncomingDamageBlocked(false);
     }
 
     private void HandleDamaged(DamageInfo damageInfo)
@@ -67,7 +74,7 @@ public class PlayerHurtReaction : MonoBehaviour
 
         if (hurtRoutine != null)
         {
-            StopCoroutine(hurtRoutine);
+            return;
         }
 
         hurtRoutine = StartCoroutine(HurtRoutine(damageInfo));
@@ -75,6 +82,8 @@ public class PlayerHurtReaction : MonoBehaviour
 
     private IEnumerator HurtRoutine(DamageInfo damageInfo)
     {
+        SetIncomingDamageBlocked(true);
+
         if (interruptAttack && playerAttack != null)
         {
             playerAttack.CancelAttack();
@@ -107,7 +116,22 @@ public class PlayerHurtReaction : MonoBehaviour
             yield return new WaitForSeconds(hurtDuration);
         }
 
+        SetIncomingDamageBlocked(false);
         hurtRoutine = null;
+    }
+
+    private void SetIncomingDamageBlocked(bool blocked)
+    {
+        if (isBlockingIncomingDamage == blocked)
+        {
+            return;
+        }
+
+        isBlockingIncomingDamage = blocked;
+        if (health != null)
+        {
+            health.SetDamageBlocked(blocked);
+        }
     }
 
     private float GetHurtHorizontalDirection(DamageInfo damageInfo)

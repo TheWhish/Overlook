@@ -8,6 +8,7 @@ public class Health : MonoBehaviour, IDamageable
     [SerializeField] private bool logDamage;
 
     private float currentHealth;
+    private int damageBlockCount;
     private bool isDead;
     private bool isInitialized;
 
@@ -37,7 +38,7 @@ public class Health : MonoBehaviour, IDamageable
     }
 
     public bool IsDead => isDead;
-    public bool CanTakeDamage => !isDead && isActiveAndEnabled;
+    public bool CanTakeDamage => !isDead && damageBlockCount <= 0 && isActiveAndEnabled;
 
     private void Awake()
     {
@@ -86,8 +87,20 @@ public class Health : MonoBehaviour, IDamageable
     public void RestoreToFull()
     {
         currentHealth = maxHealth;
+        damageBlockCount = 0;
         isDead = false;
         NotifyHealthChanged();
+    }
+
+    public void SetDamageBlocked(bool blocked)
+    {
+        if (blocked)
+        {
+            damageBlockCount++;
+            return;
+        }
+
+        damageBlockCount = Mathf.Max(0, damageBlockCount - 1);
     }
 
     private void Die(DamageInfo damageInfo)
@@ -127,6 +140,7 @@ public class Health : MonoBehaviour, IDamageable
         }
 
         currentHealth = maxHealth;
+        damageBlockCount = 0;
         isDead = false;
         isInitialized = true;
     }
