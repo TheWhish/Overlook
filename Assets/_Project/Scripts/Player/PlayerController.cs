@@ -155,11 +155,6 @@ public class PlayerController : MonoBehaviour
             return;
         }
 
-        if (playerAttack != null && playerAttack.IsAttacking)
-        {
-            return;
-        }
-
         float movementAmount = moveInput.sqrMagnitude;
 
         animator.SetFloat(SpeedHash, movementAmount);

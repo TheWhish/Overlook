@@ -6,15 +6,12 @@ using UnityEngine;
 [DisallowMultipleComponent]
 public class PlayerAttack : MonoBehaviour
 {
-    private static readonly int IsAttackingHash = Animator.StringToHash("IsAttacking");
     private static readonly int SpeedHash = Animator.StringToHash("Speed");
     private static readonly int HorizontalHash = Animator.StringToHash("Horizontal");
     private static readonly int IsRunningHash = Animator.StringToHash("IsRunning");
 
-    private const float AttackIdleDuration = 0.67f;
-    private const float AttackWalkDuration = 0.50f;
-    private const float AttackRunDuration = 0.67f;
-    private const float PostAttackFacingLockTime = 0.12f;
+    private const string DefaultAttackTriggerParameter = "Attack";
+    private const float PostHitFacingLockTime = 0.12f;
 
     [Header("Input")]
     [SerializeField] private KeyCode attackKey = KeyCode.Mouse0;
@@ -23,19 +20,15 @@ public class PlayerAttack : MonoBehaviour
     [SerializeField, Min(0f)] private float staminaCost = 18f;
     [SerializeField, Min(0f)] private float attackCooldown = 0.12f;
 
-    [Header("Animation State Names")]
-    [SerializeField] private string attackIdleStateName = "Attack_Idle";
-    [SerializeField] private string attackWalkStateName = "Attack_Walk";
-    [SerializeField] private string attackRunStateName = "Attack_Run";
+    [Header("Animation")]
+    [SerializeField] private string attackTriggerParameter = DefaultAttackTriggerParameter;
 
     [Header("Hitbox Timing")]
-    [SerializeField, Min(0f)] private float hitboxDelay = 0.08f;
-    [SerializeField, Min(0f)] private float hitboxActiveTime = 0.10f;
+    [SerializeField, Min(0f)] private float hitboxDelay = 0.16f;
+    [SerializeField, Min(0.01f)] private float hitboxActiveTime = 0.28f;
 
     [Header("Hitbox")]
     [SerializeField] private PlayerAttackHitbox attackHitbox;
-    [SerializeField] private Vector2 rightHitboxOffset = new Vector2(0.18f, 0.08f);
-    [SerializeField] private Vector2 leftHitboxOffset = new Vector2(-0.18f, 0.08f);
 
     private PlayerStamina stamina;
     private Animator animator;
@@ -47,8 +40,9 @@ public class PlayerAttack : MonoBehaviour
     private float lockedHorizontalDirection = 1f;
     private float facingLockUntil;
     private float nextAttackAllowedTime;
+    private int attackTriggerHash;
+    private bool hasAttackTrigger;
 
-    public bool IsAttacking => attackRoutine != null;
     public bool IsFacingLocked => Time.time < facingLockUntil;
     public float LockedHorizontalDirection => lockedHorizontalDirection;
 
@@ -60,12 +54,12 @@ public class PlayerAttack : MonoBehaviour
         hurtReaction = GetComponent<PlayerHurtReaction>();
         mainCamera = Camera.main;
 
+        CacheAnimatorParameters();
+
         if (attackHitbox != null)
         {
             attackHitbox.DisableHitbox();
         }
-
-        animator.SetBool(IsAttackingHash, false);
     }
 
     private void OnDisable()
@@ -81,11 +75,7 @@ public class PlayerAttack : MonoBehaviour
             attackHitbox.DisableHitbox();
         }
 
-        if (animator != null)
-        {
-            animator.SetBool(IsAttackingHash, false);
-        }
-
+        ResetAttackTrigger();
         facingLockUntil = 0f;
     }
 
@@ -142,10 +132,42 @@ public class PlayerAttack : MonoBehaviour
 
     private IEnumerator AttackRoutine(float attackHorizontalDirection)
     {
-        float currentAttackDuration = GetAttackDuration();
-        int attackStateHash = Animator.StringToHash(GetAttackStateName());
+        float attackStartTime = Time.time;
 
-        facingLockUntil = Time.time + currentAttackDuration + PostAttackFacingLockTime;
+        TriggerAttackAnimation(attackHorizontalDirection);
+        UpdateHitboxPosition(attackHorizontalDirection);
+
+        if (hitboxDelay > 0f)
+        {
+            yield return new WaitForSeconds(hitboxDelay);
+        }
+
+        float currentHitboxActiveTime = hitboxActiveTime;
+
+        if (attackHitbox != null)
+        {
+            currentHitboxActiveTime = attackHitbox.EnableHitbox(hitboxActiveTime);
+        }
+
+        facingLockUntil = attackStartTime + hitboxDelay + currentHitboxActiveTime + PostHitFacingLockTime;
+
+        yield return new WaitForSeconds(currentHitboxActiveTime);
+
+        if (attackHitbox != null)
+        {
+            attackHitbox.DisableHitbox();
+        }
+
+        attackRoutine = null;
+        nextAttackAllowedTime = Time.time + attackCooldown;
+    }
+
+    private void TriggerAttackAnimation(float attackHorizontalDirection)
+    {
+        if (animator == null || !hasAttackTrigger)
+        {
+            return;
+        }
 
         if (playerController != null)
         {
@@ -154,63 +176,40 @@ public class PlayerAttack : MonoBehaviour
         }
 
         animator.SetFloat(HorizontalHash, attackHorizontalDirection);
-        animator.SetBool(IsAttackingHash, true);
-        animator.Play(attackStateHash, 0, 0f);
-
-        UpdateHitboxPosition(attackHorizontalDirection);
-
-        yield return new WaitForSeconds(hitboxDelay);
-
-        if (attackHitbox != null)
-        {
-            attackHitbox.EnableHitbox();
-        }
-
-        yield return new WaitForSeconds(hitboxActiveTime);
-
-        if (attackHitbox != null)
-        {
-            attackHitbox.DisableHitbox();
-        }
-
-        float remainingAttackTime = currentAttackDuration - hitboxDelay - hitboxActiveTime;
-
-        if (remainingAttackTime > 0f)
-        {
-            yield return new WaitForSeconds(remainingAttackTime);
-        }
-
-        animator.SetBool(IsAttackingHash, false);
-
-        attackRoutine = null;
-        nextAttackAllowedTime = Time.time + attackCooldown;
+        animator.ResetTrigger(attackTriggerHash);
+        animator.SetTrigger(attackTriggerHash);
     }
 
-    private float GetAttackDuration()
+    private void ResetAttackTrigger()
     {
-        if (playerController == null || !playerController.HasMovementInput)
+        if (animator != null && hasAttackTrigger)
         {
-            return AttackIdleDuration;
+            animator.ResetTrigger(attackTriggerHash);
         }
-
-        if (playerController.IsRunning)
-        {
-            return AttackRunDuration;
-        }
-
-        return AttackWalkDuration;
     }
 
-    private string GetAttackStateName()
+    private void CacheAnimatorParameters()
     {
-        if (playerController == null || !playerController.HasMovementInput)
+        attackTriggerHash = Animator.StringToHash(attackTriggerParameter);
+        hasAttackTrigger = false;
+
+        if (animator == null)
         {
-            return attackIdleStateName;
+            return;
         }
 
-        return playerController.IsRunning
-            ? attackRunStateName
-            : attackWalkStateName;
+        foreach (AnimatorControllerParameter parameter in animator.parameters)
+        {
+            if (parameter.nameHash == attackTriggerHash && parameter.type == AnimatorControllerParameterType.Trigger)
+            {
+                hasAttackTrigger = true;
+                return;
+            }
+        }
+
+        Debug.LogWarning(
+            $"Animator on {name} has no trigger parameter '{attackTriggerParameter}'. Attack gameplay will work, but no attack animation trigger will be sent.",
+            this);
     }
 
     private float GetAttackHorizontalDirection()
@@ -240,11 +239,7 @@ public class PlayerAttack : MonoBehaviour
             return;
         }
 
-        Vector2 offset = attackHorizontalDirection > 0f
-            ? rightHitboxOffset
-            : leftHitboxOffset;
-
-        attackHitbox.transform.localPosition = offset;
+        attackHitbox.SetFacingDirection(attackHorizontalDirection);
     }
 
     private bool ShouldIgnoreAttackInput()
@@ -269,13 +264,10 @@ public class PlayerAttack : MonoBehaviour
         if (animator == null)
         {
             animator = GetComponent<Animator>();
+            CacheAnimatorParameters();
         }
 
-        if (animator != null)
-        {
-            animator.SetBool(IsAttackingHash, false);
-        }
-
+        ResetAttackTrigger();
         facingLockUntil = 0f;
     }
 
@@ -284,21 +276,11 @@ public class PlayerAttack : MonoBehaviour
         staminaCost = Mathf.Max(0f, staminaCost);
         attackCooldown = Mathf.Max(0f, attackCooldown);
         hitboxDelay = Mathf.Max(0f, hitboxDelay);
-        hitboxActiveTime = Mathf.Max(0f, hitboxActiveTime);
+        hitboxActiveTime = Mathf.Max(0.01f, hitboxActiveTime);
 
-        if (string.IsNullOrWhiteSpace(attackIdleStateName))
+        if (string.IsNullOrWhiteSpace(attackTriggerParameter))
         {
-            attackIdleStateName = "Attack_Idle";
-        }
-
-        if (string.IsNullOrWhiteSpace(attackWalkStateName))
-        {
-            attackWalkStateName = "Attack_Walk";
-        }
-
-        if (string.IsNullOrWhiteSpace(attackRunStateName))
-        {
-            attackRunStateName = "Attack_Run";
+            attackTriggerParameter = DefaultAttackTriggerParameter;
         }
     }
 }

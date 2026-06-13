@@ -11,6 +11,8 @@ public class DamageCameraShake : MonoBehaviour
 
     [Header("Enemy Damage")]
     [SerializeField] private bool shakeOnEnemyDamage = true;
+    [SerializeField] private bool requirePlayerSourceForEnemyShake = true;
+    [SerializeField] private bool requirePlayerAttackHitGroupForEnemyShake = true;
     [SerializeField, Min(0f)] private float enemyShakeAmplitude = 0.026f;
     [SerializeField, Min(0f)] private float enemyShakeDuration = 0.16f;
     [SerializeField, Min(1f)] private float enemyShakeFrequency = 20f;
@@ -58,13 +60,50 @@ public class DamageCameraShake : MonoBehaviour
             return;
         }
 
-        if (!shakeOnEnemyDamage || !IsInLayerMask(damagedLayer, enemyLayers) || Time.time < nextEnemyShakeTime)
+        if (!IsInLayerMask(damagedLayer, enemyLayers))
+        {
+            return;
+        }
+
+        PlayEnemyDamageShake(damageInfo);
+    }
+
+    private void PlayEnemyDamageShakeUnchecked()
+    {
+        if (!shakeOnEnemyDamage || Time.time < nextEnemyShakeTime)
         {
             return;
         }
 
         nextEnemyShakeTime = Time.time + enemyShakeCooldown;
         PlayShake(enemyShakeAmplitude, enemyShakeDuration, enemyShakeFrequency);
+    }
+
+    public void PlayEnemyDamageShake(DamageInfo damageInfo)
+    {
+        if (!CanPlayEnemyDamageShake(damageInfo))
+        {
+            return;
+        }
+
+        PlayEnemyDamageShakeUnchecked();
+    }
+
+    public static void PlayEnemyDamageShakeOnMainCamera(DamageInfo damageInfo)
+    {
+        Camera mainCamera = Camera.main;
+
+        if (mainCamera == null)
+        {
+            return;
+        }
+
+        DamageCameraShake cameraShake = mainCamera.GetComponent<DamageCameraShake>();
+
+        if (cameraShake != null)
+        {
+            cameraShake.PlayEnemyDamageShake(damageInfo);
+        }
     }
 
     private void LateUpdate()
@@ -129,6 +168,34 @@ public class DamageCameraShake : MonoBehaviour
     private static bool IsInLayerMask(int layer, LayerMask layerMask)
     {
         return (layerMask.value & (1 << layer)) != 0;
+    }
+
+    private bool CanPlayEnemyDamageShake(DamageInfo damageInfo)
+    {
+        if (requirePlayerAttackHitGroupForEnemyShake && damageInfo.HitGroupId == 0)
+        {
+            return false;
+        }
+
+        return !requirePlayerSourceForEnemyShake || IsPlayerDamageSource(damageInfo.Source);
+    }
+
+    private static bool IsPlayerDamageSource(GameObject source)
+    {
+        if (source == null)
+        {
+            return false;
+        }
+
+        if (source.GetComponent<PlayerAttack>() != null
+            || source.GetComponentInParent<PlayerAttack>() != null
+            || source.GetComponentInChildren<PlayerAttackHitbox>() != null)
+        {
+            return true;
+        }
+
+        Transform root = source.transform.root;
+        return root != null && root.GetComponent<PlayerAttack>() != null;
     }
 
     private void OnValidate()

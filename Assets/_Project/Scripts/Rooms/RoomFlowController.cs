@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Serialization;
@@ -82,10 +83,19 @@ public sealed class RoomFlowController : MonoBehaviour
 
     [Header("Runtime")]
     [SerializeField] private Vector2 cameraOffset;
-    [SerializeField, Min(0f)] private float entrySpawnPadding = 0.12f;
     [SerializeField, Min(0f)] private float enemySpawnRadius = 0.12f;
     [SerializeField, Min(0f)] private float transitionCooldown = 0.25f;
     [SerializeField] private bool logRoomFlow = true;
+
+    [Header("Room Camera Transition Prototype")]
+    [SerializeField] private bool animateRoomTransitions = true;
+    [SerializeField, Min(0f)] private float cameraTransitionDuration = 0.42f;
+    [SerializeField] private AnimationCurve cameraTransitionCurve = CreateDefaultCameraTransitionCurve();
+    [SerializeField] private bool blockGameplayInputDuringCameraTransition = true;
+    [SerializeField, Min(0f)] private float entryTeleportPadding = 0.01f;
+    [SerializeField, Range(0f, 1f)] private float playerTeleportAtCameraProgress = 0.82f;
+    [SerializeField, Min(0f)] private float entryExitRearmDistance = 0.16f;
+    [SerializeField, Min(0f)] private float previousRoomDeactivateDelay = 0.12f;
 
     [SerializeField, HideInInspector] private GameObject startRoomPrefab;
     [SerializeField, HideInInspector] private GameObject room01Prefab;
@@ -98,17 +108,30 @@ public sealed class RoomFlowController : MonoBehaviour
     private readonly Dictionary<ExitKey, GeneratedRoomNode> generatedTransitions = new Dictionary<ExitKey, GeneratedRoomNode>();
     private readonly Dictionary<GameObject, RoomDirection[]> prefabExitsCache = new Dictionary<GameObject, RoomDirection[]>();
     private readonly Dictionary<GameObject, Dictionary<RoomDirection, Vector3>> prefabExitPositionsCache = new Dictionary<GameObject, Dictionary<RoomDirection, Vector3>>();
+    private readonly Dictionary<GameObject, Bounds> prefabRoomBoundsCache = new Dictionary<GameObject, Bounds>();
+    private readonly Dictionary<RoomDefinition, Coroutine> previousRoomDeactivateRoutines = new Dictionary<RoomDefinition, Coroutine>();
     private readonly HashSet<string> completedRoomIds = new HashSet<string>();
 
     private Transform roomsRoot;
     private PlayerController player;
+    private Camera cachedMainCamera;
     private GeneratedRoomNode activeRoom;
     private float nextAllowedTransitionTime;
+    private Coroutine cameraTransitionRoutine;
+    private bool roomTransitionInProgress;
+    private bool gameplayInputBlockedByRoomTransition;
+    private RoomExit entryExitWaitingForRearm;
 
     public static RoomFlowController Instance { get; private set; }
     public static event Action<int> CompletedRoomCountChanged;
 
     public int CompletedRoomCount => completedRoomIds.Count;
+    public bool CameraTransitionsEnabled => animateRoomTransitions;
+
+    public void SetCameraTransitionsEnabled(bool enabled)
+    {
+        animateRoomTransitions = enabled;
+    }
 
     private void Awake()
     {
@@ -122,6 +145,34 @@ public sealed class RoomFlowController : MonoBehaviour
         }
 
         Instance = this;
+    }
+
+    private void OnDisable()
+    {
+        if (gameplayInputBlockedByRoomTransition)
+        {
+            GameplayInputGate.SetSceneTransitionBlocked(false);
+            gameplayInputBlockedByRoomTransition = false;
+        }
+        entryExitWaitingForRearm = null;
+
+        foreach (Coroutine routine in previousRoomDeactivateRoutines.Values)
+        {
+            if (routine != null)
+            {
+                StopCoroutine(routine);
+            }
+        }
+
+        previousRoomDeactivateRoutines.Clear();
+    }
+
+    private void OnDestroy()
+    {
+        if (Instance == this)
+        {
+            Instance = null;
+        }
     }
 
     private void Start()
@@ -142,6 +193,11 @@ public sealed class RoomFlowController : MonoBehaviour
         EnterRoom(startRoom, RoomDirection.None, true);
     }
 
+    private void Update()
+    {
+        UpdateEntryExitRearm();
+    }
+
     public void TryEnterExit(RoomExit roomExit, PlayerController transitionPlayer)
     {
         if (roomExit == null || roomExit.Room == null || transitionPlayer == null)
@@ -149,7 +205,18 @@ public sealed class RoomFlowController : MonoBehaviour
             return;
         }
 
-        if (Time.unscaledTime < nextAllowedTransitionTime)
+        if (roomTransitionInProgress ||
+            Time.unscaledTime < nextAllowedTransitionTime)
+        {
+            return;
+        }
+
+        if (activeRoom == null || roomExit.Room != activeRoom.Definition)
+        {
+            return;
+        }
+
+        if (IsEntryExitWaitingForRearm(roomExit))
         {
             return;
         }
@@ -169,9 +236,8 @@ public sealed class RoomFlowController : MonoBehaviour
             return;
         }
 
-        RegisterCompletedRoom(roomExit.Room);
-
         player = transitionPlayer;
+        RegisterCompletedRoom(roomExit.Room);
         EnterRoom(targetRoom, RoomDirectionUtility.Opposite(roomExit.Direction), false);
     }
 
@@ -182,7 +248,9 @@ public sealed class RoomFlowController : MonoBehaviour
         generatedTransitions.Clear();
         prefabExitsCache.Clear();
         prefabExitPositionsCache.Clear();
+        prefabRoomBoundsCache.Clear();
         completedRoomIds.Clear();
+        entryExitWaitingForRearm = null;
         CompletedRoomCountChanged?.Invoke(CompletedRoomCount);
 
         int generationSeed = randomizeSeed ? Guid.NewGuid().GetHashCode() : seed;
@@ -339,17 +407,60 @@ public sealed class RoomFlowController : MonoBehaviour
     {
         if (!alignRoomInstancesByExits ||
             parent == null ||
-            !TryGetPrefabExitLocalPosition(parent.Prefab, parentExit, out Vector3 parentExitLocalPosition) ||
-            !TryGetPrefabExitLocalPosition(childPrefab, childEntry, out Vector3 childEntryLocalPosition))
+            !TryGetPrefabRoomBoundsLocal(parent.Prefab, out Bounds parentBounds) ||
+            !TryGetPrefabRoomBoundsLocal(childPrefab, out Bounds childBounds))
         {
             return GetFallbackRoomWorldPosition(targetCell);
         }
 
         Vector2Int cellOffset = RoomDirectionUtility.ToCellOffset(parentExit);
-        Vector3 gapOffset = new Vector3(cellOffset.x, cellOffset.y, 0f) * roomConnectionGap;
-        Vector3 worldPosition = parent.WorldPosition + parentExitLocalPosition - childEntryLocalPosition + gapOffset;
+
+        if (cellOffset == Vector2Int.zero)
+        {
+            return GetFallbackRoomWorldPosition(targetCell);
+        }
+
+        Vector3 worldPosition = parent.WorldPosition;
+
+        if (cellOffset.x != 0)
+        {
+            float parentEdge = parent.WorldPosition.x + (cellOffset.x > 0 ? parentBounds.max.x : parentBounds.min.x);
+            float childEdge = cellOffset.x > 0 ? childBounds.min.x : childBounds.max.x;
+            worldPosition.x = parentEdge - childEdge + cellOffset.x * roomConnectionGap;
+            worldPosition.y = GetPerpendicularAlignedRoomPosition(parent, parentExit, childPrefab, childEntry, parentBounds, childBounds, false);
+        }
+        else
+        {
+            float parentEdge = parent.WorldPosition.y + (cellOffset.y > 0 ? parentBounds.max.y : parentBounds.min.y);
+            float childEdge = cellOffset.y > 0 ? childBounds.min.y : childBounds.max.y;
+            worldPosition.x = GetPerpendicularAlignedRoomPosition(parent, parentExit, childPrefab, childEntry, parentBounds, childBounds, true);
+            worldPosition.y = parentEdge - childEdge + cellOffset.y * roomConnectionGap;
+        }
+
         worldPosition.z = 0f;
         return worldPosition;
+    }
+
+    private float GetPerpendicularAlignedRoomPosition(
+        GeneratedRoomNode parent,
+        RoomDirection parentExit,
+        GameObject childPrefab,
+        RoomDirection childEntry,
+        Bounds parentBounds,
+        Bounds childBounds,
+        bool alignX)
+    {
+        if (TryGetPrefabExitLocalPosition(parent.Prefab, parentExit, out Vector3 parentExitLocalPosition) &&
+            TryGetPrefabExitLocalPosition(childPrefab, childEntry, out Vector3 childEntryLocalPosition))
+        {
+            return alignX
+                ? parent.WorldPosition.x + parentExitLocalPosition.x - childEntryLocalPosition.x
+                : parent.WorldPosition.y + parentExitLocalPosition.y - childEntryLocalPosition.y;
+        }
+
+        return alignX
+            ? parent.WorldPosition.x + parentBounds.center.x - childBounds.center.x
+            : parent.WorldPosition.y + parentBounds.center.y - childBounds.center.y;
     }
 
     private Vector3 GetFallbackRoomWorldPosition(Vector2Int cell)
@@ -430,24 +541,45 @@ public sealed class RoomFlowController : MonoBehaviour
             return;
         }
 
-        if (activeRoom != null && activeRoom != targetRoom)
-        {
-            activeRoom.Definition.gameObject.SetActive(false);
-        }
+        RoomDefinition previousRoomDefinition = activeRoom != null ? activeRoom.Definition : null;
+        bool shouldAnimateCamera = ShouldAnimateCameraTransition(previousRoomDefinition, targetRoom.Definition);
 
         activeRoom = targetRoom;
+        CancelPreviousRoomDeactivate(activeRoom.Definition);
         activeRoom.Definition.gameObject.SetActive(true);
         activeRoom.Definition.PrepareRuntime();
 
-        Vector3 spawnPosition = usePlayerSpawn
+        bool shouldTeleportPlayer = usePlayerSpawn || entryDirection != RoomDirection.None;
+        RoomExit entryExitToRearm = !usePlayerSpawn && entryDirection != RoomDirection.None
+            ? activeRoom.Definition.GetExit(entryDirection)
+            : null;
+        Vector3 playerTeleportPosition = usePlayerSpawn
             ? activeRoom.Definition.GetPlayerStartPosition()
-            : activeRoom.Definition.GetEntryPosition(entryDirection, entrySpawnPadding, GetPlayerCollider());
+            : activeRoom.Definition.GetEntryPosition(entryDirection, entryTeleportPadding, GetPlayerCollider());
+        bool delayPlayerTeleport = shouldTeleportPlayer && !usePlayerSpawn && shouldAnimateCamera;
 
-        TeleportPlayer(spawnPosition);
-        SnapCameraToRoom(activeRoom.Definition);
+        if (usePlayerSpawn)
+        {
+            TeleportPlayer(playerTeleportPosition);
+            entryExitWaitingForRearm = null;
+        }
+        else if (shouldTeleportPlayer && !delayPlayerTeleport)
+        {
+            TeleportPlayer(playerTeleportPosition);
+            ArmEntryExitRearm(entryExitToRearm);
+        }
+
+        MoveCameraToRoom(
+            previousRoomDefinition,
+            activeRoom.Definition,
+            shouldAnimateCamera,
+            delayPlayerTeleport,
+            playerTeleportPosition,
+            entryExitToRearm);
 
         int spawnedEnemies = activeRoom.Definition.SpawnEnemiesOnce(enemyPrefabs, enemySpawnRadius, entryDirection);
-        nextAllowedTransitionTime = Time.unscaledTime + transitionCooldown;
+        float cameraLockTime = shouldAnimateCamera ? cameraTransitionDuration : 0f;
+        nextAllowedTransitionTime = Time.unscaledTime + transitionCooldown + cameraLockTime;
 
         Log($"Room entered: {activeRoom.RuntimeId}. Cell: {activeRoom.Cell}. Entry: {entryDirection}. Enemies spawned now: {spawnedEnemies}.");
     }
@@ -511,6 +643,47 @@ public sealed class RoomFlowController : MonoBehaviour
         return player != null ? player.GetComponent<Collider2D>() : null;
     }
 
+    private bool IsEntryExitWaitingForRearm(RoomExit roomExit)
+    {
+        return entryExitWaitingForRearm != null && roomExit == entryExitWaitingForRearm;
+    }
+
+    private void UpdateEntryExitRearm()
+    {
+        if (entryExitWaitingForRearm == null)
+        {
+            return;
+        }
+
+        Collider2D playerCollider = GetPlayerCollider();
+
+        if (playerCollider == null)
+        {
+            entryExitWaitingForRearm = null;
+            return;
+        }
+
+        float distanceToExit = entryExitWaitingForRearm.GetDistanceTo(playerCollider);
+
+        if (distanceToExit < entryExitRearmDistance)
+        {
+            return;
+        }
+
+        Log($"Entry exit rearmed: {entryExitWaitingForRearm.name}. Player distance: {distanceToExit:0.###}.");
+        entryExitWaitingForRearm = null;
+    }
+
+    private void ArmEntryExitRearm(RoomExit entryExit)
+    {
+        entryExitWaitingForRearm = entryExit;
+
+        if (entryExitWaitingForRearm != null)
+        {
+            Log($"Entry exit locked until player moves {entryExitRearmDistance:0.###} units away: {entryExitWaitingForRearm.name}.");
+        }
+    }
+
     private void TeleportPlayer(Vector3 position)
     {
         if (player == null)
@@ -519,41 +692,289 @@ public sealed class RoomFlowController : MonoBehaviour
             return;
         }
 
+        position.z = player.transform.position.z;
         Rigidbody2D playerBody = player.GetComponent<Rigidbody2D>();
 
         if (playerBody != null)
         {
             playerBody.linearVelocity = Vector2.zero;
-            playerBody.position = position;
+            playerBody.position = new Vector2(position.x, position.y);
         }
         else
         {
             player.transform.position = position;
         }
+
+        Physics2D.SyncTransforms();
     }
 
-    private void SnapCameraToRoom(RoomDefinition roomDefinition)
+    private void MoveCameraToRoom(
+        RoomDefinition previousRoomDefinition,
+        RoomDefinition targetRoomDefinition,
+        bool animateCamera,
+        bool teleportPlayerDuringTransition,
+        Vector3 playerTeleportPosition,
+        RoomExit entryExitToRearm)
     {
-        Camera mainCamera = Camera.main;
+        Vector3 targetCameraPosition = GetCameraPositionForRoom(targetRoomDefinition);
+
+        if (!animateCamera)
+        {
+            if (teleportPlayerDuringTransition)
+            {
+                TeleportPlayer(playerTeleportPosition);
+                ArmEntryExitRearm(entryExitToRearm);
+            }
+
+            SnapCameraToPosition(targetCameraPosition);
+            SchedulePreviousRoomDeactivate(previousRoomDefinition);
+            return;
+        }
+
+        StartCameraTransition(
+            previousRoomDefinition,
+            targetRoomDefinition,
+            targetCameraPosition,
+            teleportPlayerDuringTransition,
+            playerTeleportPosition,
+            entryExitToRearm);
+    }
+
+    private bool ShouldAnimateCameraTransition(RoomDefinition previousRoomDefinition, RoomDefinition targetRoomDefinition)
+    {
+        return animateRoomTransitions &&
+               cameraTransitionDuration > 0f &&
+               previousRoomDefinition != null &&
+               targetRoomDefinition != null &&
+               previousRoomDefinition != targetRoomDefinition;
+    }
+
+    private Vector3 GetCameraPositionForRoom(RoomDefinition roomDefinition)
+    {
+        Camera mainCamera = GetMainCamera();
 
         if (mainCamera == null)
         {
-            Log("Camera snap skipped: Main Camera was not found.");
-            return;
+            Log("Camera move skipped: Main Camera was not found.");
+            return Vector3.zero;
         }
 
         if (roomDefinition == null)
         {
-            Log("Camera snap skipped: room definition was not found.");
-            return;
+            Log("Camera move skipped: room definition was not found.");
+            return mainCamera.transform.position;
         }
 
         Vector3 targetPosition = roomDefinition.GetCameraCenter();
-        Transform cameraTransform = mainCamera.transform;
-        Vector3 cameraPosition = cameraTransform.position;
+        Vector3 cameraPosition = mainCamera.transform.position;
         cameraPosition.x = targetPosition.x + cameraOffset.x;
         cameraPosition.y = targetPosition.y + cameraOffset.y;
+        return cameraPosition;
+    }
+
+    private void SnapCameraToPosition(Vector3 cameraPosition)
+    {
+        Camera mainCamera = GetMainCamera();
+
+        if (mainCamera == null)
+        {
+            return;
+        }
+
+        Transform cameraTransform = mainCamera.transform;
         cameraTransform.position = cameraPosition;
+    }
+
+    private void StartCameraTransition(
+        RoomDefinition previousRoomDefinition,
+        RoomDefinition targetRoomDefinition,
+        Vector3 targetCameraPosition,
+        bool teleportPlayerDuringTransition,
+        Vector3 playerTeleportPosition,
+        RoomExit entryExitToRearm)
+    {
+        if (cameraTransitionRoutine != null)
+        {
+            StopCoroutine(cameraTransitionRoutine);
+            FinishCameraTransition(previousRoomDefinition, targetRoomDefinition);
+        }
+
+        cameraTransitionRoutine = StartCoroutine(AnimateCameraTransition(
+            previousRoomDefinition,
+            targetRoomDefinition,
+            targetCameraPosition,
+            teleportPlayerDuringTransition,
+            playerTeleportPosition,
+            entryExitToRearm));
+    }
+
+    private IEnumerator AnimateCameraTransition(
+        RoomDefinition previousRoomDefinition,
+        RoomDefinition targetRoomDefinition,
+        Vector3 targetCameraPosition,
+        bool teleportPlayerDuringTransition,
+        Vector3 playerTeleportPosition,
+        RoomExit entryExitToRearm)
+    {
+        Camera mainCamera = GetMainCamera();
+
+        if (mainCamera == null)
+        {
+            if (teleportPlayerDuringTransition)
+            {
+                TeleportPlayer(playerTeleportPosition);
+                ArmEntryExitRearm(entryExitToRearm);
+            }
+
+            FinishCameraTransition(previousRoomDefinition, targetRoomDefinition);
+            yield break;
+        }
+
+        roomTransitionInProgress = true;
+
+        if (blockGameplayInputDuringCameraTransition || teleportPlayerDuringTransition)
+        {
+            GameplayInputGate.SetSceneTransitionBlocked(true);
+            gameplayInputBlockedByRoomTransition = true;
+        }
+
+        Transform cameraTransform = mainCamera.transform;
+        Vector3 startCameraPosition = cameraTransform.position;
+        float elapsedTime = 0f;
+        float duration = Mathf.Max(0.01f, cameraTransitionDuration);
+        bool playerWasTeleported = false;
+
+        while (elapsedTime < duration)
+        {
+            elapsedTime += Time.unscaledDeltaTime;
+
+            float normalizedTime = Mathf.Clamp01(elapsedTime / duration);
+            float curvedTime = EvaluateCameraTransitionCurve(normalizedTime);
+            Vector3 cameraPosition = Vector3.LerpUnclamped(startCameraPosition, targetCameraPosition, curvedTime);
+            cameraPosition.z = targetCameraPosition.z;
+            cameraTransform.position = cameraPosition;
+
+            if (teleportPlayerDuringTransition &&
+                !playerWasTeleported &&
+                normalizedTime >= playerTeleportAtCameraProgress)
+            {
+                TeleportPlayer(playerTeleportPosition);
+                ArmEntryExitRearm(entryExitToRearm);
+                playerWasTeleported = true;
+            }
+            yield return null;
+        }
+
+        if (teleportPlayerDuringTransition && !playerWasTeleported)
+        {
+            TeleportPlayer(playerTeleportPosition);
+            ArmEntryExitRearm(entryExitToRearm);
+        }
+
+        cameraTransform.position = targetCameraPosition;
+        FinishCameraTransition(previousRoomDefinition, targetRoomDefinition);
+    }
+
+    private float EvaluateCameraTransitionCurve(float normalizedTime)
+    {
+        if (cameraTransitionCurve == null || cameraTransitionCurve.length == 0)
+        {
+            return SmootherStep(normalizedTime);
+        }
+
+        return Mathf.Clamp01(cameraTransitionCurve.Evaluate(normalizedTime));
+    }
+
+    private static AnimationCurve CreateDefaultCameraTransitionCurve()
+    {
+        return new AnimationCurve(
+            new Keyframe(0f, 0f, 0f, 0f),
+            new Keyframe(0.24f, 0.055f, 0.28f, 0.28f),
+            new Keyframe(0.76f, 0.945f, 0.28f, 0.28f),
+            new Keyframe(1f, 1f, 0f, 0f));
+    }
+
+    private static float SmootherStep(float value)
+    {
+        float t = Mathf.Clamp01(value);
+        return t * t * t * (t * (t * 6f - 15f) + 10f);
+    }
+
+    private Camera GetMainCamera()
+    {
+        if (cachedMainCamera == null)
+        {
+            cachedMainCamera = Camera.main;
+        }
+
+        return cachedMainCamera;
+    }
+
+    private void FinishCameraTransition(RoomDefinition previousRoomDefinition, RoomDefinition targetRoomDefinition)
+    {
+        cameraTransitionRoutine = null;
+        roomTransitionInProgress = false;
+
+        if (gameplayInputBlockedByRoomTransition)
+        {
+            GameplayInputGate.SetSceneTransitionBlocked(false);
+            gameplayInputBlockedByRoomTransition = false;
+        }
+        SchedulePreviousRoomDeactivate(previousRoomDefinition);
+    }
+
+    private void SchedulePreviousRoomDeactivate(RoomDefinition previousRoomDefinition)
+    {
+        if (!ShouldDeactivatePreviousRoom(previousRoomDefinition))
+        {
+            return;
+        }
+
+        CancelPreviousRoomDeactivate(previousRoomDefinition);
+
+        if (previousRoomDeactivateDelay <= 0f)
+        {
+            previousRoomDefinition.gameObject.SetActive(false);
+            return;
+        }
+
+        Coroutine routine = StartCoroutine(DeactivatePreviousRoomAfterDelay(previousRoomDefinition));
+        previousRoomDeactivateRoutines[previousRoomDefinition] = routine;
+    }
+
+    private IEnumerator DeactivatePreviousRoomAfterDelay(RoomDefinition previousRoomDefinition)
+    {
+        yield return new WaitForSecondsRealtime(previousRoomDeactivateDelay);
+        previousRoomDeactivateRoutines.Remove(previousRoomDefinition);
+
+        if (ShouldDeactivatePreviousRoom(previousRoomDefinition))
+        {
+            previousRoomDefinition.gameObject.SetActive(false);
+        }
+    }
+
+    private void CancelPreviousRoomDeactivate(RoomDefinition roomDefinition)
+    {
+        if (roomDefinition == null ||
+            !previousRoomDeactivateRoutines.TryGetValue(roomDefinition, out Coroutine routine))
+        {
+            return;
+        }
+
+        if (routine != null)
+        {
+            StopCoroutine(routine);
+        }
+
+        previousRoomDeactivateRoutines.Remove(roomDefinition);
+    }
+
+    private bool ShouldDeactivatePreviousRoom(RoomDefinition previousRoomDefinition)
+    {
+        return previousRoomDefinition != null &&
+               activeRoom != null &&
+               previousRoomDefinition != activeRoom.Definition &&
+               previousRoomDefinition.gameObject.activeSelf;
     }
 
     private GeneratedRoomNode FindStartNode()
@@ -713,6 +1134,182 @@ public sealed class RoomFlowController : MonoBehaviour
         return positions;
     }
 
+    private bool TryGetPrefabRoomBoundsLocal(GameObject roomPrefab, out Bounds localBounds)
+    {
+        localBounds = default;
+
+        if (roomPrefab == null)
+        {
+            return false;
+        }
+
+        if (prefabRoomBoundsCache.TryGetValue(roomPrefab, out localBounds))
+        {
+            return true;
+        }
+
+        if (TryGetPrefabRoomBoundsCollider(roomPrefab, out Collider2D roomBoundsCollider) &&
+            TryGetColliderLocalBounds(roomPrefab.transform, roomBoundsCollider, out localBounds))
+        {
+            prefabRoomBoundsCache.Add(roomPrefab, localBounds);
+            return true;
+        }
+
+        if (TryGetPrefabRendererLocalBounds(roomPrefab, out localBounds))
+        {
+            prefabRoomBoundsCache.Add(roomPrefab, localBounds);
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryGetPrefabRoomBoundsCollider(GameObject roomPrefab, out Collider2D roomBoundsCollider)
+    {
+        roomBoundsCollider = null;
+
+        if (roomPrefab == null)
+        {
+            return false;
+        }
+
+        Transform[] children = roomPrefab.GetComponentsInChildren<Transform>(true);
+
+        for (int i = 0; i < children.Length; i++)
+        {
+            Transform child = children[i];
+
+            if (child == null || child.name != "Bounds")
+            {
+                continue;
+            }
+
+            roomBoundsCollider = child.GetComponent<Collider2D>();
+
+            if (roomBoundsCollider != null)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool TryGetColliderLocalBounds(Transform root, Collider2D boundsCollider, out Bounds localBounds)
+    {
+        localBounds = default;
+
+        if (root == null || boundsCollider == null)
+        {
+            return false;
+        }
+
+        BoxCollider2D boxCollider = boundsCollider as BoxCollider2D;
+
+        if (boxCollider != null)
+        {
+            Vector2 halfSize = boxCollider.size * 0.5f;
+            Vector2 offset = boxCollider.offset;
+            Vector3 min = new Vector3(float.PositiveInfinity, float.PositiveInfinity, float.PositiveInfinity);
+            Vector3 max = new Vector3(float.NegativeInfinity, float.NegativeInfinity, float.NegativeInfinity);
+
+            EncapsulateLocalPoint(root, boxCollider.transform, new Vector3(offset.x - halfSize.x, offset.y - halfSize.y, 0f), ref min, ref max);
+            EncapsulateLocalPoint(root, boxCollider.transform, new Vector3(offset.x - halfSize.x, offset.y + halfSize.y, 0f), ref min, ref max);
+            EncapsulateLocalPoint(root, boxCollider.transform, new Vector3(offset.x + halfSize.x, offset.y - halfSize.y, 0f), ref min, ref max);
+            EncapsulateLocalPoint(root, boxCollider.transform, new Vector3(offset.x + halfSize.x, offset.y + halfSize.y, 0f), ref min, ref max);
+
+            localBounds = new Bounds((min + max) * 0.5f, max - min);
+            return true;
+        }
+
+        Bounds worldBounds = boundsCollider.bounds;
+
+        if (worldBounds.size == Vector3.zero)
+        {
+            return false;
+        }
+
+        localBounds = ConvertWorldBoundsToLocalBounds(root, worldBounds);
+        return true;
+    }
+
+    private static bool TryGetPrefabRendererLocalBounds(GameObject roomPrefab, out Bounds localBounds)
+    {
+        localBounds = default;
+
+        if (roomPrefab == null)
+        {
+            return false;
+        }
+
+        Renderer[] renderers = roomPrefab.GetComponentsInChildren<Renderer>(true);
+        Bounds worldBounds = default;
+        bool hasBounds = false;
+
+        for (int i = 0; i < renderers.Length; i++)
+        {
+            Renderer renderer = renderers[i];
+
+            if (renderer == null)
+            {
+                continue;
+            }
+
+            if (!hasBounds)
+            {
+                worldBounds = renderer.bounds;
+                hasBounds = true;
+                continue;
+            }
+
+            worldBounds.Encapsulate(renderer.bounds);
+        }
+
+        if (!hasBounds)
+        {
+            return false;
+        }
+
+        localBounds = ConvertWorldBoundsToLocalBounds(roomPrefab.transform, worldBounds);
+        return true;
+    }
+
+    private static Bounds ConvertWorldBoundsToLocalBounds(Transform root, Bounds worldBounds)
+    {
+        Vector3 min = new Vector3(float.PositiveInfinity, float.PositiveInfinity, float.PositiveInfinity);
+        Vector3 max = new Vector3(float.NegativeInfinity, float.NegativeInfinity, float.NegativeInfinity);
+
+        EncapsulateWorldBoundsCorner(root, worldBounds.min.x, worldBounds.min.y, worldBounds.min.z, ref min, ref max);
+        EncapsulateWorldBoundsCorner(root, worldBounds.min.x, worldBounds.min.y, worldBounds.max.z, ref min, ref max);
+        EncapsulateWorldBoundsCorner(root, worldBounds.min.x, worldBounds.max.y, worldBounds.min.z, ref min, ref max);
+        EncapsulateWorldBoundsCorner(root, worldBounds.min.x, worldBounds.max.y, worldBounds.max.z, ref min, ref max);
+        EncapsulateWorldBoundsCorner(root, worldBounds.max.x, worldBounds.min.y, worldBounds.min.z, ref min, ref max);
+        EncapsulateWorldBoundsCorner(root, worldBounds.max.x, worldBounds.min.y, worldBounds.max.z, ref min, ref max);
+        EncapsulateWorldBoundsCorner(root, worldBounds.max.x, worldBounds.max.y, worldBounds.min.z, ref min, ref max);
+        EncapsulateWorldBoundsCorner(root, worldBounds.max.x, worldBounds.max.y, worldBounds.max.z, ref min, ref max);
+
+        return new Bounds((min + max) * 0.5f, max - min);
+    }
+
+    private static void EncapsulateWorldBoundsCorner(Transform root, float x, float y, float z, ref Vector3 min, ref Vector3 max)
+    {
+        Vector3 localPoint = root.InverseTransformPoint(new Vector3(x, y, z));
+        min = Vector3.Min(min, localPoint);
+        max = Vector3.Max(max, localPoint);
+    }
+
+    private static void EncapsulateLocalPoint(
+        Transform root,
+        Transform pointOwner,
+        Vector3 ownerLocalPoint,
+        ref Vector3 min,
+        ref Vector3 max)
+    {
+        Vector3 localPoint = root.InverseTransformPoint(pointOwner.TransformPoint(ownerLocalPoint));
+        min = Vector3.Min(min, localPoint);
+        max = Vector3.Max(max, localPoint);
+    }
+
     private bool PrefabHasExit(GameObject roomPrefab, RoomDirection direction)
     {
         RoomDirection[] exits = GetPrefabExitDirections(roomPrefab);
@@ -821,12 +1418,16 @@ public sealed class RoomFlowController : MonoBehaviour
     private void OnValidate()
     {
         roomsToGenerate = Mathf.Max(1, roomsToGenerate);
-        entrySpawnPadding = Mathf.Max(0f, entrySpawnPadding);
         enemySpawnRadius = Mathf.Max(0f, enemySpawnRadius);
         transitionCooldown = Mathf.Max(0f, transitionCooldown);
         roomConnectionGap = Mathf.Max(0f, roomConnectionGap);
         roomSpacing.x = Mathf.Max(0.1f, roomSpacing.x);
         roomSpacing.y = Mathf.Max(0.1f, roomSpacing.y);
+        cameraTransitionDuration = Mathf.Max(0f, cameraTransitionDuration);
+        entryTeleportPadding = Mathf.Max(0f, entryTeleportPadding);
+        playerTeleportAtCameraProgress = Mathf.Clamp01(playerTeleportAtCameraProgress);
+        entryExitRearmDistance = Mathf.Max(0f, entryExitRearmDistance);
+        previousRoomDeactivateDelay = Mathf.Max(0f, previousRoomDeactivateDelay);
 
         AutoAssignEditorPrefabs();
         MigrateLegacyRoomFields();

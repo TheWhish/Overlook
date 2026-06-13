@@ -85,48 +85,9 @@ public sealed class RoomDefinition : MonoBehaviour
             return GetPlayerStartPosition();
         }
 
-        Vector3 entryPosition = entryExit.SpawnPosition;
         Vector2 inwardDirection = RoomDirectionUtility.ToEntryInwardVector(entryDirection);
         float clearance = GetEntryClearance(entryExit, entryDirection, playerCollider, entrySpawnPadding);
-        return entryPosition + new Vector3(inwardDirection.x, inwardDirection.y, 0f) * clearance;
-    }
-
-    private float GetEntryClearance(
-        RoomExit entryExit,
-        RoomDirection entryDirection,
-        Collider2D playerCollider,
-        float entrySpawnPadding)
-    {
-        if (entryDirection == RoomDirection.None)
-        {
-            return 0f;
-        }
-
-        float exitHalfExtent = entryExit != null ? entryExit.GetHalfExtentAlong(entryDirection) : 0f;
-        float playerHalfExtent = GetPlayerHalfExtentAlong(playerCollider, entryDirection);
-        return exitHalfExtent + playerHalfExtent + Mathf.Max(0f, entrySpawnPadding);
-    }
-
-    private static float GetPlayerHalfExtentAlong(Collider2D playerCollider, RoomDirection entryDirection)
-    {
-        if (playerCollider == null)
-        {
-            return 0f;
-        }
-
-        Bounds bounds = playerCollider.bounds;
-
-        switch (entryDirection)
-        {
-            case RoomDirection.Left:
-            case RoomDirection.Right:
-                return bounds.extents.x;
-            case RoomDirection.Top:
-            case RoomDirection.Bottom:
-                return bounds.extents.y;
-            default:
-                return 0f;
-        }
+        return entryExit.SpawnPosition + new Vector3(inwardDirection.x, inwardDirection.y, 0f) * clearance;
     }
 
     public Vector3 GetCameraCenter()
@@ -338,8 +299,20 @@ public sealed class RoomDefinition : MonoBehaviour
 
     private bool TryGetRendererCenter(out Vector3 center)
     {
+        if (TryGetRendererBounds(out Bounds rendererBounds))
+        {
+            center = rendererBounds.center;
+            return true;
+        }
+
+        center = transform.position;
+        return false;
+    }
+
+    private bool TryGetRendererBounds(out Bounds combinedBounds)
+    {
         Renderer[] renderers = GetComponentsInChildren<Renderer>(true);
-        Bounds combinedBounds = default;
+        combinedBounds = default;
         bool hasBounds = false;
 
         for (int i = 0; i < renderers.Length; i++)
@@ -361,8 +334,36 @@ public sealed class RoomDefinition : MonoBehaviour
             combinedBounds.Encapsulate(renderer.bounds);
         }
 
-        center = hasBounds ? combinedBounds.center : transform.position;
         return hasBounds;
+    }
+
+    private static float GetEntryClearance(RoomExit entryExit, RoomDirection entryDirection, Collider2D playerCollider, float padding)
+    {
+        float exitHalfExtent = entryExit != null ? entryExit.GetHalfExtentAlong(entryDirection) : 0f;
+        float playerHalfExtent = GetPlayerHalfExtentAlong(playerCollider, entryDirection);
+        return exitHalfExtent + playerHalfExtent + Mathf.Max(0f, padding);
+    }
+
+    private static float GetPlayerHalfExtentAlong(Collider2D playerCollider, RoomDirection entryDirection)
+    {
+        if (playerCollider == null)
+        {
+            return 0f;
+        }
+
+        Bounds bounds = playerCollider.bounds;
+
+        switch (entryDirection)
+        {
+            case RoomDirection.Left:
+            case RoomDirection.Right:
+                return bounds.extents.x;
+            case RoomDirection.Top:
+            case RoomDirection.Bottom:
+                return bounds.extents.y;
+            default:
+                return 0f;
+        }
     }
 
     private void ConfigureExits()
