@@ -243,14 +243,10 @@ MonoBehaviour:
   attackKey: 323
   staminaCost: 15
   attackCooldown: 0.12
-  attackIdleStateName: Attack_Idle
-  attackWalkStateName: Attack_Walk
-  attackRunStateName: Attack_Run
-  hitboxDelay: 0.1
-  hitboxActiveTime: 0.1
+  attackTriggerParameter: Attack
+  hitboxDelay: 0
+  hitboxActiveTime: 0.28
   attackHitbox: {fileID: 3980031116619861810}
-  rightHitboxOffset: {x: 0.15, y: 0}
-  leftHitboxOffset: {x: -0.15, y: 0}
 --- !u!114 &159276495739163398
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -370,7 +366,7 @@ BoxCollider2D:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 7866302684520984191}
-  m_Enabled: 1
+  m_Enabled: 0
   serializedVersion: 3
   m_Density: 1
   m_Material: {fileID: 0}
@@ -423,6 +419,75 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerAttackHitbox
   targetLayers:
     serializedVersion: 2
-    m_Bits: 256
+    m_Bits: 2304
   damage: 10
-  drawGizmos: 0
+  maxOverlapCount: 16
+  includeTriggerColliders: 1
+  disableLegacyCollider: 1
+  rightOriginOffset: {x: 0.02, y: 0.09}
+  leftOriginOffset: {x: -0.02, y: 0.09}
+  innerRadius: 0.04
+  outerRadius: 0.22
+  sectorAngle: 120
+  rightSectorCenterAngle: 0
+  mirrorRightSectorToLeft: 1
+  leftSectorCenterAngle: 0
+  radiusPadding: 0.01
+  anglePadding: 2
+  useMovingWave: 1
+  waveAngle: 8
+  sweepStartOffset: -60
+  sweepEndOffset: 60
+  mirrorSweepDirectionForLeft: 1
+  overrideActiveDuration: 1
+  activeDurationOverride: 0.32
+  minimumActiveDuration: 0.16
+  waveStartDelay: 0.04
+  waveEndHoldTime: 0.02
+  canHitDuringStartDelay: 0
+  canHitDuringEndHold: 0
+  fallbackSweepDuration: 0.32
+  sweepCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 1
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  testColliderCenter: 1
+  testClosestPoint: 1
+  testBoundsCardinalPoints: 1
+  drawGizmos: 1
+  drawOnlyWhenSelected: 0
+  drawBothDirectionsInEditMode: 1
+  drawFullSector: 1
+  drawSweepLimits: 0
+  drawActiveWave: 1
+  drawOverlapRadius: 0
+  drawTimingInfo: 0
+  drawCandidatePoints: 0
+  drawHitPoints: 1
+  drawLabels: 0
+  gizmoSegments: 16
+  fullSectorColor: {r: 1, g: 0.85, b: 0.15, a: 0.55}
+  activeWaveColor: {r: 0.15, g: 1, b: 0.75, a: 0.9}
+  sweepLimitColor: {r: 1, g: 0.35, b: 0.15, a: 0.8}
+  candidatePointColor: {r: 0.2, g: 0.55, b: 1, a: 0.85}
+  hitPointColor: {r: 1, g: 0.1, b: 0.1, a: 0.95}

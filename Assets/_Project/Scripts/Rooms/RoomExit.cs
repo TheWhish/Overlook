@@ -14,30 +14,6 @@ public sealed class RoomExit : MonoBehaviour
     public RoomDirection Direction => direction;
     public Vector3 SpawnPosition => transform.position;
 
-    public float GetHalfExtentAlong(RoomDirection roomDirection)
-    {
-        EnsureColliderIsTrigger();
-
-        if (triggerCollider == null)
-        {
-            return 0f;
-        }
-
-        Bounds bounds = triggerCollider.bounds;
-
-        switch (roomDirection)
-        {
-            case RoomDirection.Left:
-            case RoomDirection.Right:
-                return bounds.extents.x;
-            case RoomDirection.Top:
-            case RoomDirection.Bottom:
-                return bounds.extents.y;
-            default:
-                return 0f;
-        }
-    }
-
     public void Configure(RoomDefinition owner)
     {
         room = owner;
@@ -117,5 +93,42 @@ public sealed class RoomExit : MonoBehaviour
         {
             triggerCollider.isTrigger = true;
         }
+    }
+
+    public float GetHalfExtentAlong(RoomDirection roomDirection)
+    {
+        EnsureColliderIsTrigger();
+
+        if (triggerCollider == null)
+        {
+            return 0f;
+        }
+
+        Bounds bounds = triggerCollider.bounds;
+
+        switch (roomDirection)
+        {
+            case RoomDirection.Left:
+            case RoomDirection.Right:
+                return bounds.extents.x;
+            case RoomDirection.Top:
+            case RoomDirection.Bottom:
+                return bounds.extents.y;
+            default:
+                return 0f;
+        }
+    }
+
+    public float GetDistanceTo(Collider2D otherCollider)
+    {
+        EnsureColliderIsTrigger();
+
+        if (triggerCollider == null || otherCollider == null)
+        {
+            return float.PositiveInfinity;
+        }
+
+        ColliderDistance2D distance = triggerCollider.Distance(otherCollider);
+        return Mathf.Max(0f, distance.distance);
     }
 }
