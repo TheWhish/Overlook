@@ -128,7 +128,7 @@ Rigidbody2D:
     m_Bits: 0
   m_Interpolate: 1
   m_SleepingMode: 1
-  m_CollisionDetection: 0
+  m_CollisionDetection: 1
   m_Constraints: 4
 --- !u!95 &4401575305498970374
 Animator:
@@ -162,7 +162,7 @@ BoxCollider2D:
   m_Enabled: 1
   serializedVersion: 3
   m_Density: 1
-  m_Material: {fileID: 0}
+  m_Material: {fileID: 6200000, guid: 2415e53db4e549c1b71f76885013cc9f, type: 2}
   m_IncludeLayers:
     serializedVersion: 2
     m_Bits: 0
@@ -212,6 +212,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerController
   walkSpeed: 0.5
   runSpeed: 0.75
+  movementCollisionLayers:
+    serializedVersion: 2
+    m_Bits: 2561
+  collisionSkinWidth: 0.0015
+  collisionSlideIterations: 3
+  minimumMoveDistance: 0.00001
   runStaminaCostPerSecond: 25
 --- !u!114 &2386278563043630599
 MonoBehaviour:
@@ -259,10 +265,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fde35fa8ac214dd99b8b19d27c6c74f2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SpriteDepthSorter
+  depthSortMode: 1
   baseSortingOrder: 10000
   unitsToOrder: 100
-  sortingOrderOffset: 1
+  sortingOrderOffset: 0
   sortPoint: {fileID: 0}
+  unitySortingOrder: 0
 --- !u!114 &7355530258458391649
 MonoBehaviour:
   m_ObjectHideFlags: 0

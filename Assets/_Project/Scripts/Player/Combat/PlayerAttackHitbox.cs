@@ -62,10 +62,14 @@ public class PlayerAttackHitbox : MonoBehaviour
     [SerializeField] private bool drawSweepLimits = true;
     [SerializeField] private bool drawActiveWave = true;
     [SerializeField] private bool drawOverlapRadius = true;
+#if UNITY_EDITOR
     [SerializeField] private bool drawTimingInfo = true;
+#endif
     [SerializeField] private bool drawCandidatePoints = true;
     [SerializeField] private bool drawHitPoints = true;
+#if UNITY_EDITOR
     [SerializeField] private bool drawLabels = true;
+#endif
     [SerializeField, Range(8, 64)] private int gizmoSegments = 32;
     [SerializeField] private Color fullSectorColor = new Color(1f, 0.85f, 0.15f, 0.55f);
     [SerializeField] private Color activeWaveColor = new Color(0.15f, 1f, 0.75f, 0.9f);

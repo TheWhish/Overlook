@@ -289,10 +289,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fde35fa8ac214dd99b8b19d27c6c74f2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SpriteDepthSorter
+  depthSortMode: 1
   baseSortingOrder: 10000
   unitsToOrder: 100
   sortingOrderOffset: 0
   sortPoint: {fileID: 0}
+  unitySortingOrder: 0
 --- !u!114 &990107095053063276
 MonoBehaviour:
   m_ObjectHideFlags: 0

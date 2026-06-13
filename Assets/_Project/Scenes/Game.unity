@@ -756,7 +756,7 @@ Camera:
   far clip plane: 1000
   field of view: 34
   orthographic: 1
-  orthographic size: 1.08
+  orthographic size: 1.2
   m_Depth: -1
   m_CullingMask:
     serializedVersion: 2
@@ -2767,6 +2767,8 @@ MonoBehaviour:
   - {fileID: 8206855131514300236, guid: 4420dd47e47ae0d4eb124eedef070abe, type: 3}
   - {fileID: 8206855131514300236, guid: 1fcefd9923f8dbf4dba12d34535ca87b, type: 3}
   - {fileID: 8206855131514300236, guid: 1c5695fc1da6bc44a9d45ab1b8bfe9d5, type: 3}
+  - {fileID: 8206855131514300236, guid: e9f89d217a8eb8f46953bfb892bb7d78, type: 3}
+  - {fileID: 8206855131514300236, guid: 3fabfed9625cdeb4bb5d42fec2975952, type: 3}
   roomsToGenerate: 30
   randomizeSeed: 1
   seed: 0
